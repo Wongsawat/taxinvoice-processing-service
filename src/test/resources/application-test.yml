@@ -14,24 +14,27 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
 
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: test-group
-      enable-auto-commit: false
-
   flyway:
     enabled: false
 
+# Apache Camel test configuration
+camel:
+  springboot:
+    name: taxinvoice-processing-camel-test
+
+# Application-specific configuration (test topics)
 app:
   kafka:
+    bootstrap-servers: localhost:9092
     topics:
       document-received-taxinvoice: document.received.tax-invoice.test
       taxinvoice-processed: taxinvoice.processed.test
       pdf-generation-requested: pdf.generation.requested.test
       xml-signing-requested: xml.signing.requested.test
+      dlq: taxinvoice.processing.dlq.test
 
 logging:
   level:
     root: WARN
     com.wpanther.taxinvoice.processing: INFO
+    org.apache.camel: WARN
