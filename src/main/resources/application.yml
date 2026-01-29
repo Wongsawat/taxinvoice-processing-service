@@ -56,7 +56,6 @@ app:
     topics:
       document-received-taxinvoice: document.received.tax-invoice
       taxinvoice-processed: taxinvoice.processed
-      pdf-generation-requested: pdf.generation.requested
       xml-signing-requested: xml.signing.requested
       dlq: taxinvoice.processing.dlq
 

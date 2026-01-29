@@ -29,7 +29,6 @@ app:
     topics:
       document-received-taxinvoice: document.received.tax-invoice.test
       taxinvoice-processed: taxinvoice.processed.test
-      pdf-generation-requested: pdf.generation.requested.test
       xml-signing-requested: xml.signing.requested.test
       dlq: taxinvoice.processing.dlq.test
 

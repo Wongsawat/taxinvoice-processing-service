@@ -6,12 +6,14 @@ Microservice for processing and enriching Thai e-Tax **tax invoice** data in the
 
 The Tax Invoice Processing Service is responsible for:
 
-- **Receiving** validated tax invoices from the Document Intake Service via Kafka
+- **Receiving** validated tax invoices from the Document Intake Service via Kafka (using Apache Camel routes)
 - **Parsing** XML tax invoices using the teda library v1.0.0
 - **Enriching** tax invoice data with business logic
 - **Calculating** totals, taxes, and other derived values
-- **Publishing** processed tax invoice events
-- **Requesting** XML signing for downstream services
+- **Publishing** processed tax invoice events to downstream services
+- **Requesting** XML signing for processed invoices (PDF generation is triggered after XML signing)
+
+**Recent Changes**: This service has been migrated from Spring Kafka to Apache Camel 4.14.4 for message routing and handling.
 
 ## Key Difference from Invoice Processing Service
 
@@ -36,8 +38,9 @@ This service follows DDD principles with:
 |-----------|------------|
 | Language | Java 21 |
 | Framework | Spring Boot 3.2.5 |
+| Message Routing | Apache Camel 4.14.4 |
 | Database | PostgreSQL |
-| Messaging | Apache Kafka |
+| Messaging | Apache Kafka (via Camel) |
 | Service Discovery | Netflix Eureka |
 | Database Migration | Flyway |
 | XML Parsing | teda Library v1.0.0 |
@@ -52,6 +55,8 @@ This service follows DDD principles with:
 
 ## Kafka Integration
 
+All Kafka integration is handled via Apache Camel routes defined in `TaxInvoiceRouteConfig.java`.
+
 ### Consumed Events
 
 | Event | Topic | Description |
@@ -64,6 +69,12 @@ This service follows DDD principles with:
 |-------|-------|-------------|
 | `TaxInvoiceProcessedEvent` | `taxinvoice.processed` | Tax invoice processing completed |
 | `XmlSigningRequestedEvent` | `xml.signing.requested` | Request XML signing (XAdES) |
+
+### Error Handling
+
+Failed events are routed to a Dead Letter Queue after 3 retries with exponential backoff:
+- **DLQ Topic**: `taxinvoice.processing.dlq`
+- **Retry Policy**: 1s initial delay, 2x multiplier, max 10s delay
 
 ## Configuration
 
@@ -132,6 +143,8 @@ docker run -p 8088:8088 \
 
 ## API Endpoints
 
+This service is event-driven with no REST API endpoints. Only Spring Boot Actuator endpoints are available:
+
 ### Health Check
 
 ```bash
@@ -143,6 +156,12 @@ GET http://localhost:8088/actuator/health
 ```bash
 GET http://localhost:8088/actuator/metrics
 GET http://localhost:8088/actuator/prometheus
+```
+
+### Camel Routes Monitoring
+
+```bash
+GET http://localhost:8088/actuator/camelroutes
 ```
 
 ## Development
@@ -161,8 +180,9 @@ src/main/java/com/wpanther/taxinvoice/processing/
 │   └── service/            # Application services
 └── infrastructure/
     ├── persistence/        # JPA entities, repositories
-    ├── messaging/          # Kafka consumers, publishers
-    └── config/             # Configuration classes
+    ├── messaging/          # EventPublisher (uses Camel ProducerTemplate)
+    ├── service/            # TaxInvoiceParserServiceImpl (teda XML parsing)
+    └── config/             # Spring configuration, Camel routes
 ```
 
 ### Database Migrations
@@ -195,7 +215,7 @@ This service uses the Thai e-Tax Invoice library (teda v1.0.0) for:
 
 The service exposes Prometheus metrics at `/actuator/prometheus`:
 
-- `kafka_consumer_fetch_manager_records_lag` - Consumer lag
+- `camel.*` - Apache Camel route metrics
 - `jvm_memory_used_bytes` - JVM memory usage
 - Custom business metrics
 
@@ -204,7 +224,8 @@ The service exposes Prometheus metrics at `/actuator/prometheus`:
 Structured logging is configured for:
 
 - Application events
-- Kafka message processing
+- Apache Camel route processing
+- Kafka message exchange
 - Database operations
 - Error tracking
 
@@ -216,11 +237,13 @@ Structured logging is configured for:
 mvn test
 ```
 
-### Integration Tests
+### Integration Tests with Coverage
 
 ```bash
 mvn verify
 ```
+
+**Note**: JaCoCo enforces 90% line coverage per package. The build will fail if coverage is below threshold.
 
 ## Event Flow
 
@@ -234,6 +257,7 @@ Document Intake Service
 ┌─────────────────────────────┐
 │  Tax Invoice Processing     │
 │  Service                    │
+│  (Apache Camel Routes)      │
 │                             │
 │  1. Parse XML (teda 1.0.0)  │
 │  2. Validate                │
@@ -241,17 +265,18 @@ Document Intake Service
 │  4. Save to DB              │
 └──────────┬──────────────────┘
            │
-           ▼
-    (taxinvoice.processed)
+           ├──▶ (taxinvoice.processed) ──▶ Notification Service
            │
-           ├──▶ Notification Service
-           │
-           ▼
-   (xml.signing.requested)
-           │
-           ▼
-    XML Signing Service
+           └──▶ (xml.signing.requested) ──▶ XML Signing Service
+                                              │
+                                              ▼
+                                        (xml.signed.tax-invoice)
+                                              │
+                                              ▼
+                                      Tax Invoice PDF Generation Service
 ```
+
+**Message Routing**: All Kafka integration is handled via Apache Camel routes defined in `TaxInvoiceRouteConfig.java`. Failed messages are routed to a Dead Letter Queue (`taxinvoice.processing.dlq`) after 3 retries with exponential backoff.
 
 ## License
 

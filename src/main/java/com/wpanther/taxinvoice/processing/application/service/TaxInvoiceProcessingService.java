@@ -3,7 +3,6 @@ package com.wpanther.taxinvoice.processing.application.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReceivedEvent;
-import com.wpanther.taxinvoice.processing.domain.event.PdfGenerationRequestedEvent;
 import com.wpanther.taxinvoice.processing.domain.event.XmlSigningRequestedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;

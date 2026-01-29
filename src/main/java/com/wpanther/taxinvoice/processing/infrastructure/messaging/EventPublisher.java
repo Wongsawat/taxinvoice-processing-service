@@ -1,6 +1,5 @@
 package com.wpanther.taxinvoice.processing.infrastructure.messaging;
 
-import com.wpanther.taxinvoice.processing.domain.event.PdfGenerationRequestedEvent;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.event.XmlSigningRequestedEvent;
 import lombok.RequiredArgsConstructor;
@@ -33,25 +32,6 @@ public class EventPublisher {
             log.info("Successfully published tax invoice processed event: {}", event.getInvoiceNumber());
         } catch (Exception e) {
             log.error("Failed to publish tax invoice processed event: {}", event.getInvoiceNumber(), e);
-            throw e;
-        }
-    }
-
-    /**
-     * Publish PDF generation requested event
-     */
-    public void publishPdfGenerationRequested(PdfGenerationRequestedEvent event) {
-        log.info("Publishing PDF generation request for invoice: {}", event.getInvoiceNumber());
-        try {
-            producerTemplate.sendBodyAndHeader(
-                "direct:publish-pdf-generation-requested",
-                event,
-                "kafka.KEY",
-                event.getInvoiceId()
-            );
-            log.info("Successfully published PDF generation request: {}", event.getInvoiceNumber());
-        } catch (Exception e) {
-            log.error("Failed to publish PDF generation request: {}", event.getInvoiceNumber(), e);
             throw e;
         }
     }
