@@ -247,7 +247,7 @@ mvn test
 mvn verify
 ```
 
-**Note**: JaCoCo enforces 90% line coverage per package. The build will fail if coverage is below threshold.
+**Note**: JaCoCo enforces 80% line coverage per package. The build will fail if coverage is below threshold.
 
 ## Event Flow
 
