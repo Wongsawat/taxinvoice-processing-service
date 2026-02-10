@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.processing.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wpanther.saga.domain.model.IntegrationEvent;
 import lombok.Getter;
 
 import java.math.BigDecimal;
@@ -32,7 +33,7 @@ public class TaxInvoiceProcessedEvent extends IntegrationEvent {
     private final String correlationId;
 
     public TaxInvoiceProcessedEvent(String invoiceId, String invoiceNumber, BigDecimal total, String currency, String correlationId) {
-        super(EVENT_TYPE);
+        super();
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.total = total;

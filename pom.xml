@@ -23,6 +23,7 @@
         <spring-cloud.version>2023.0.1</spring-cloud.version>
         <camel.version>4.14.4</camel.version>
         <teda.version>1.0.0</teda.version>
+        <saga.commons.version>1.0.0-SNAPSHOT</saga.commons.version>
         <lombok.version>1.18.30</lombok.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <flyway.version>10.10.0</flyway.version>
@@ -128,6 +129,13 @@
             <groupId>com.wpanther</groupId>
             <artifactId>thai-etax-invoice</artifactId>
             <version>${teda.version}</version>
+        </dependency>
+
+        <!-- Saga Commons for outbox pattern -->
+        <dependency>
+            <groupId>com.wpanther</groupId>
+            <artifactId>saga-commons</artifactId>
+            <version>${saga.commons.version}</version>
         </dependency>
 
         <!-- Lombok -->
