@@ -44,6 +44,7 @@ This service follows DDD principles with:
 | Service Discovery | Netflix Eureka |
 | Database Migration | Flyway |
 | XML Parsing | teda Library v1.0.0 |
+| Event Base Classes | saga-commons Library v1.0.0-SNAPSHOT |
 
 ## Database Schema
 
@@ -98,14 +99,17 @@ Failed events are routed to a Dead Letter Queue after 3 retries with exponential
 2. Kafka broker running
 3. Eureka server running (optional)
 4. Thai e-Tax Invoice library (teda v1.0.0) installed locally
+5. saga-commons library v1.0.0-SNAPSHOT installed locally
 
 ### Build
 
 ```bash
-# Build teda library first
+# Build dependencies first
 cd ../../../teda && mvn clean install
+cd ../../../saga-commons && mvn clean install
 
 # Build this service
+cd services/taxinvoice-processing-service
 mvn clean package
 ```
 
