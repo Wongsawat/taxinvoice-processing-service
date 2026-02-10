@@ -28,21 +28,17 @@ class TaxInvoiceRouteConfigTest {
     @Test
     @DisplayName("Should have all routes configured")
     void shouldHaveAllRoutesConfigured() {
-        // Assert
+        // Assert - only consumer route (producers removed - outbox pattern handles publishing)
         assertNotNull(camelContext.getRoute("taxinvoice-processing-consumer"),
             "Consumer route should be configured");
-        assertNotNull(camelContext.getRoute("taxinvoice-processed-producer"),
-            "TaxInvoice processed producer route should be configured");
-        assertNotNull(camelContext.getRoute("xml-signing-requested-producer"),
-            "XML signing requested producer route should be configured");
     }
 
     @Test
     @DisplayName("Should have correct number of routes")
     void shouldHaveCorrectNumberOfRoutes() {
-        // We expect 3 routes: 1 consumer + 2 producers
-        assertEquals(3, camelContext.getRoutes().size(),
-            "Should have exactly 3 routes configured");
+        // We expect 1 route: 1 consumer (producers removed - outbox pattern handles publishing)
+        assertEquals(1, camelContext.getRoutes().size(),
+            "Should have exactly 1 route configured");
     }
 
     @Test

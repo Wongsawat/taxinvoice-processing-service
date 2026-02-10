@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Apache Camel routes for tax invoice processing.
- * Replaces Spring Kafka consumer and producer configuration.
+ * Event publishing now uses Outbox Pattern - only consumer route remains.
  */
 @Component
 @Slf4j
@@ -23,12 +23,6 @@ public class TaxInvoiceRouteConfig extends RouteBuilder {
 
     @Value("${app.kafka.topics.document-received-taxinvoice}")
     private String inputTopic;
-
-    @Value("${app.kafka.topics.taxinvoice-processed}")
-    private String taxinvoiceProcessedTopic;
-
-    @Value("${app.kafka.topics.xml-signing-requested}")
-    private String xmlSigningRequestedTopic;
 
     @Value("${app.kafka.topics.dlq:taxinvoice.processing.dlq}")
     private String dlqTopic;
@@ -72,34 +66,10 @@ public class TaxInvoiceRouteConfig extends RouteBuilder {
                 TaxInvoiceReceivedEvent event = exchange.getIn().getBody(TaxInvoiceReceivedEvent.class);
                 log.info("Processing tax invoice: {}", event.getInvoiceNumber());
 
-                // Call existing application service (unchanged)
+                // Application service uses OutboxService for event publishing
                 processingService.processInvoiceReceived(event);
             })
 
             .log("Successfully processed tax invoice");
-
-        // ============================================================
-        // PRODUCER ROUTE: taxinvoice.processed
-        // ============================================================
-        from("direct:publish-taxinvoice-processed")
-            .routeId("taxinvoice-processed-producer")
-            .log("Publishing TaxInvoiceProcessedEvent: ${body.invoiceNumber}")
-            .marshal().json(JsonLibrary.Jackson)
-            .to("kafka:" + taxinvoiceProcessedTopic
-                + "?brokers=" + kafkaBrokers
-                + "&key=${header.kafka.KEY}")
-            .log("Published TaxInvoiceProcessedEvent to " + taxinvoiceProcessedTopic);
-
-        // ============================================================
-        // PRODUCER ROUTE: xml.signing.requested
-        // ============================================================
-        from("direct:publish-xml-signing-requested")
-            .routeId("xml-signing-requested-producer")
-            .log("Publishing XmlSigningRequestedEvent: ${body.invoiceNumber}")
-            .marshal().json(JsonLibrary.Jackson)
-            .to("kafka:" + xmlSigningRequestedTopic
-                + "?brokers=" + kafkaBrokers
-                + "&key=${header.kafka.KEY}")
-            .log("Published XmlSigningRequestedEvent to " + xmlSigningRequestedTopic);
     }
 }

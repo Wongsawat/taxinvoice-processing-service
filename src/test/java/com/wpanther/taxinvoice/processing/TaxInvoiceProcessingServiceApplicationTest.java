@@ -33,7 +33,7 @@ class TaxInvoiceProcessingServiceApplicationTest {
             "Should have EventPublisher bean");
         assertTrue(applicationContext.containsBean("taxInvoiceRouteConfig"),
             "Should have TaxInvoiceRouteConfig bean");
-        assertTrue(applicationContext.containsBean("producerTemplate"),
-            "Should have ProducerTemplate bean");
+        assertTrue(applicationContext.containsBean("outboxService"),
+            "Should have OutboxService bean from saga-commons");
     }
 }
