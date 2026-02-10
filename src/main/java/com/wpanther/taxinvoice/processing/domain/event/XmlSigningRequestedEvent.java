@@ -45,6 +45,11 @@ public class XmlSigningRequestedEvent extends IntegrationEvent {
         this.documentType = documentType;
     }
 
+    @Override
+    public String getEventType() {
+        return EVENT_TYPE;
+    }
+
     @JsonCreator
     public XmlSigningRequestedEvent(
         @JsonProperty("eventId") UUID eventId,

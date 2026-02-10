@@ -1,7 +1,9 @@
 package com.wpanther.taxinvoice.processing;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.context.ApplicationContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ActiveProfiles;
@@ -35,5 +37,14 @@ class TaxInvoiceProcessingServiceApplicationTest {
             "Should have TaxInvoiceRouteConfig bean");
         assertTrue(applicationContext.containsBean("outboxService"),
             "Should have OutboxService bean from saga-commons");
+    }
+
+    @Test
+    void testApplicationClassAnnotations() {
+        // Then - verify the main application class has correct annotations
+        assertNotNull(TaxInvoiceProcessingServiceApplication.class.getAnnotation(SpringBootApplication.class),
+            "Application class should have @SpringBootApplication annotation");
+        assertNotNull(TaxInvoiceProcessingServiceApplication.class.getAnnotation(EnableDiscoveryClient.class),
+            "Application class should have @EnableDiscoveryClient annotation");
     }
 }

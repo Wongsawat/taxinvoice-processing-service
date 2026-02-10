@@ -36,6 +36,11 @@ public class TaxInvoiceReceivedEvent extends IntegrationEvent {
         this.correlationId = correlationId;
     }
 
+    @Override
+    public String getEventType() {
+        return EVENT_TYPE;
+    }
+
     @JsonCreator
     public TaxInvoiceReceivedEvent(
         @JsonProperty("eventId") UUID eventId,
