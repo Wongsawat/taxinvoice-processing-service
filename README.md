@@ -45,6 +45,22 @@ This service follows DDD principles with:
 | Database Migration | Flyway |
 | XML Parsing | teda Library v1.0.0 |
 | Event Base Classes | saga-commons Library v1.0.0-SNAPSHOT |
+| Event Delivery | Outbox Pattern with Debezium CDC |
+
+### Outbox Pattern
+
+This service uses the **Transactional Outbox Pattern** for reliable event delivery:
+
+1. **Outbox Table**: `outbox_events` stores events atomically with domain changes
+2. **Debezium CDC**: Monitors the outbox table and publishes to Kafka
+3. **Exactly-Once Delivery**: Guaranteed by PostgreSQL logical replication
+
+**Flow**: Service saves domain + outbox events in one transaction → Debezium captures changes → Events published to Kafka → Downstream services consume
+
+This pattern ensures:
+- No events lost if service crashes after DB commit
+- Atomic consistency between domain state and events
+- Decoupling from external systems (Kafka)
 
 ## Database Schema
 
@@ -53,6 +69,7 @@ This service follows DDD principles with:
 1. **processed_tax_invoices** - Main tax invoice data
 2. **tax_invoice_parties** - Seller and buyer information
 3. **tax_invoice_line_items** - Tax invoice line items with quantities and prices
+4. **outbox_events** - Transactional outbox for reliable event delivery (CDC)
 
 ## Kafka Integration
 
@@ -235,19 +252,57 @@ Structured logging is configured for:
 
 ## Testing
 
+This service has **261 tests** in total:
+- **248 unit tests** - Framework-independent tests with mocked dependencies
+- **7 Kafka consumer integration tests** - End-to-end tests through Apache Camel routes
+- **6 CDC (Debezium) integration tests** - Outbox pattern event delivery verification
+
 ### Unit Tests
 
 ```bash
 mvn test
 ```
 
-### Integration Tests with Coverage
+### Integration Tests
+
+Integration tests require Docker containers for PostgreSQL, Kafka, and optionally Debezium.
+
+#### Start Test Containers
+
+```bash
+cd /home/wpanther/projects/etax/invoice-microservices
+
+# Start PostgreSQL + Kafka (for Kafka consumer tests)
+./scripts/test-containers-start.sh
+
+# Start PostgreSQL + Kafka + Debezium (for CDC tests)
+./scripts/test-containers-start.sh --with-debezium --auto-deploy-connectors
+```
+
+#### Run Integration Tests
+
+```bash
+cd services/taxinvoice-processing-service
+
+# Run Kafka consumer integration tests only
+mvn test -Pintegration -Dtest=KafkaConsumerIntegrationTest
+
+# Run CDC integration tests only
+mvn test -Pintegration -Dtest=TaxInvoiceCdcIntegrationTest
+
+# Run all integration tests
+mvn test -Pintegration
+```
+
+**Note**: See [docs/INTEGRATION_TESTS.md](docs/INTEGRATION_TESTS.md) for detailed integration test documentation.
+
+### Coverage
 
 ```bash
 mvn verify
 ```
 
-**Note**: JaCoCo enforces 80% line coverage per package. The build will fail if coverage is below threshold.
+JaCoCo enforces 80% line coverage per package. The build will fail if coverage is below threshold.
 
 ## Event Flow
 
