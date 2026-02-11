@@ -30,8 +30,23 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     public ProcessedTaxInvoice save(ProcessedTaxInvoice invoice) {
         log.debug("Saving processed tax invoice: {}", invoice.getInvoiceNumber());
 
-        ProcessedTaxInvoiceEntity entity = mapper.toEntity(invoice);
-        ProcessedTaxInvoiceEntity saved = jpaRepository.save(entity);
+        // Check if entity already exists (update case for state transitions)
+        Optional<ProcessedTaxInvoiceEntity> existingOpt =
+            jpaRepository.findByIdWithDetails(invoice.getId().value());
+
+        ProcessedTaxInvoiceEntity saved;
+        if (existingOpt.isPresent()) {
+            // Update only mutable fields — children (parties, line items) don't change
+            ProcessedTaxInvoiceEntity existing = existingOpt.get();
+            existing.setStatus(invoice.getStatus());
+            existing.setErrorMessage(invoice.getErrorMessage());
+            existing.setCompletedAt(invoice.getCompletedAt());
+            saved = jpaRepository.save(existing);
+        } else {
+            // New entity — full mapping
+            ProcessedTaxInvoiceEntity entity = mapper.toEntity(invoice);
+            saved = jpaRepository.save(entity);
+        }
 
         log.info("Saved processed tax invoice: {} with ID: {}", saved.getInvoiceNumber(), saved.getId());
         return mapper.toDomain(saved);

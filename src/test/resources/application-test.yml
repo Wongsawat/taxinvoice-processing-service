@@ -25,7 +25,7 @@ camel:
 # Application-specific configuration (test topics)
 app:
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:9093
     topics:
       document-received-taxinvoice: document.received.tax-invoice.test
       taxinvoice-processed: taxinvoice.processed.test
