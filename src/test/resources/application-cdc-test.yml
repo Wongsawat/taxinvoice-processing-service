@@ -33,6 +33,9 @@ spring:
 camel:
   springboot:
     main-run-controller: false
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: true
 
 eureka:
   client:
@@ -42,10 +45,11 @@ app:
   kafka:
     bootstrap-servers: localhost:9093
     topics:
-      document-received-taxinvoice: document.received.tax-invoice
       taxinvoice-processed: taxinvoice.processed
-      xml-signing-requested: xml.signing.requested
       dlq: taxinvoice.processing.dlq
+      saga-command-tax-invoice: saga.command.tax-invoice
+      saga-compensation-tax-invoice: saga.compensation.tax-invoice
+      saga-reply-tax-invoice: saga.reply.tax-invoice
 
 logging:
   level:

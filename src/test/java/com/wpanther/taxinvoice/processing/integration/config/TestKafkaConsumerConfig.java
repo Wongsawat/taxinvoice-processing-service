@@ -44,7 +44,9 @@ public class TestKafkaConsumerConfig {
                 Collections.singletonMap("bootstrap.servers", BOOTSTRAP_SERVERS))) {
             adminClient.createTopics(Arrays.asList(
                 new NewTopic("taxinvoice.processed", 1, (short) 1),
-                new NewTopic("xml.signing.requested", 1, (short) 1)
+                new NewTopic("saga.reply.tax-invoice", 1, (short) 1),
+                new NewTopic("saga.command.tax-invoice", 1, (short) 1),
+                new NewTopic("saga.compensation.tax-invoice", 1, (short) 1)
             )).all().get(30, TimeUnit.SECONDS);
         } catch (Exception e) {
             // Topics may already exist

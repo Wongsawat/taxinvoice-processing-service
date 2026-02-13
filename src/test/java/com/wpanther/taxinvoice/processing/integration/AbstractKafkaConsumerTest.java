@@ -3,7 +3,7 @@ package com.wpanther.taxinvoice.processing.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReceivedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.integration.config.ConsumerTestConfiguration;
 import com.wpanther.taxinvoice.processing.integration.config.TestKafkaProducerConfig;
 import org.junit.jupiter.api.BeforeAll;
@@ -71,9 +71,12 @@ public abstract class AbstractKafkaConsumerTest {
         }
     }
 
-    protected TaxInvoiceReceivedEvent createTaxInvoiceReceivedEvent(
+    protected ProcessTaxInvoiceCommand createProcessTaxInvoiceCommand(
             String documentId, String invoiceNumber, String xmlContent, String correlationId) {
-        return new TaxInvoiceReceivedEvent(documentId, invoiceNumber, xmlContent, correlationId);
+        return new ProcessTaxInvoiceCommand(
+            "saga-" + correlationId, "process-tax-invoice", correlationId,
+            documentId, xmlContent, invoiceNumber
+        );
     }
 
     /**
@@ -90,7 +93,7 @@ public abstract class AbstractKafkaConsumerTest {
                .pollInterval(1, TimeUnit.SECONDS)
                .until(() -> {
                    Map<String, Object> invoice = getInvoiceBySourceId(sourceInvoiceId);
-                   return invoice != null && "PDF_REQUESTED".equals(invoice.get("status"));
+                   return invoice != null && "COMPLETED".equals(invoice.get("status"));
                });
         return getInvoiceBySourceId(sourceInvoiceId);
     }
@@ -120,6 +123,12 @@ public abstract class AbstractKafkaConsumerTest {
         return testJdbcTemplate.queryForList(
             "SELECT * FROM outbox_events WHERE aggregate_id = ? ORDER BY created_at",
             invoiceId);
+    }
+
+    protected List<Map<String, Object>> getOutboxEventsBySagaId(String sagaId) {
+        return testJdbcTemplate.queryForList(
+            "SELECT * FROM outbox_events WHERE aggregate_id = ? ORDER BY created_at",
+            sagaId);
     }
 
     protected List<Map<String, Object>> getLineItems(String invoiceId) {

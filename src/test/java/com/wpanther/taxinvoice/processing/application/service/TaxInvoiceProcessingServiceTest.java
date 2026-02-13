@@ -1,9 +1,6 @@
 package com.wpanther.taxinvoice.processing.application.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReceivedEvent;
-import com.wpanther.taxinvoice.processing.domain.event.XmlSigningRequestedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.domain.repository.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
@@ -27,7 +24,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for TaxInvoiceProcessingService
+ * Unit tests for TaxInvoiceProcessingService (saga version)
  */
 @ExtendWith(MockitoExtension.class)
 class TaxInvoiceProcessingServiceTest {
@@ -41,26 +38,13 @@ class TaxInvoiceProcessingServiceTest {
     @Mock
     private EventPublisher eventPublisher;
 
-    @Mock
-    private ObjectMapper objectMapper;
-
     @InjectMocks
     private TaxInvoiceProcessingService service;
 
-    private TaxInvoiceReceivedEvent validEvent;
     private ProcessedTaxInvoice validInvoice;
 
     @BeforeEach
     void setUp() {
-        // Setup valid event
-        validEvent = new TaxInvoiceReceivedEvent(
-            "intake-123",
-            "TXN-001",
-            "<xml>test</xml>",
-            "correlation-123"
-        );
-
-        // Setup valid invoice
         Party seller = Party.of(
             "Seller Company",
             TaxIdentifier.of("1234567890", "VAT"),
@@ -95,33 +79,34 @@ class TaxInvoiceProcessingServiceTest {
     }
 
     @Test
-    void testProcessInvoiceReceivedSuccess() throws Exception {
+    void testProcessInvoiceForSagaSuccess() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
         // When
-        service.processInvoiceReceived(validEvent);
+        ProcessedTaxInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
 
         // Then
+        assertNotNull(result);
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(parserService).parseInvoice("<xml>test</xml>", "intake-123");
-        verify(invoiceRepository, times(3)).save(any(ProcessedTaxInvoice.class));
+        verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
         verify(eventPublisher).publishTaxInvoiceProcessed(any(TaxInvoiceProcessedEvent.class));
-        verify(eventPublisher).publishXmlSigningRequested(any(XmlSigningRequestedEvent.class));
     }
 
     @Test
-    void testProcessInvoiceReceivedAlreadyProcessed() throws Exception {
+    void testProcessInvoiceForSagaAlreadyProcessed() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(validInvoice));
 
         // When
-        service.processInvoiceReceived(validEvent);
+        ProcessedTaxInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
 
         // Then
+        assertNotNull(result);
+        assertEquals(validInvoice, result);
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(parserService, never()).parseInvoice(anyString(), anyString());
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
@@ -129,51 +114,84 @@ class TaxInvoiceProcessingServiceTest {
     }
 
     @Test
-    void testProcessInvoiceReceivedParsingError() throws Exception {
+    void testProcessInvoiceForSagaParsingError() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parseInvoice(anyString(), anyString()))
             .thenThrow(new TaxInvoiceParserService.TaxInvoiceParsingException("Parse error"));
 
-        // When
-        service.processInvoiceReceived(validEvent);
+        // When / Then
+        assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+            () -> service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123"));
 
-        // Then
         verify(parserService).parseInvoice("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
         verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
     }
 
     @Test
-    void testProcessInvoiceReceivedPublishesCorrectEvents() throws Exception {
+    void testProcessInvoiceForSagaPublishesCorrectEvent() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
-        when(objectMapper.writeValueAsString(any())).thenReturn("{\"test\":\"data\"}");
 
         // When
-        service.processInvoiceReceived(validEvent);
+        service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
 
         // Then
-        ArgumentCaptor<TaxInvoiceProcessedEvent> processedEventCaptor =
+        ArgumentCaptor<TaxInvoiceProcessedEvent> eventCaptor =
             ArgumentCaptor.forClass(TaxInvoiceProcessedEvent.class);
-        verify(eventPublisher).publishTaxInvoiceProcessed(processedEventCaptor.capture());
+        verify(eventPublisher).publishTaxInvoiceProcessed(eventCaptor.capture());
 
-        TaxInvoiceProcessedEvent processedEvent = processedEventCaptor.getValue();
+        TaxInvoiceProcessedEvent processedEvent = eventCaptor.getValue();
         assertEquals("TXN-001", processedEvent.getInvoiceNumber());
         assertEquals("THB", processedEvent.getCurrency());
         assertEquals("correlation-123", processedEvent.getCorrelationId());
+    }
 
-        ArgumentCaptor<XmlSigningRequestedEvent> xmlSigningEventCaptor =
-            ArgumentCaptor.forClass(XmlSigningRequestedEvent.class);
-        verify(eventPublisher).publishXmlSigningRequested(xmlSigningEventCaptor.capture());
+    @Test
+    void testProcessInvoiceForSagaSavesTwice() throws Exception {
+        // Given
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
 
-        XmlSigningRequestedEvent xmlSigningEvent = xmlSigningEventCaptor.getValue();
-        assertEquals("TXN-001", xmlSigningEvent.getInvoiceNumber());
-        assertEquals("<xml>test</xml>", xmlSigningEvent.getXmlContent());
-        assertEquals("correlation-123", xmlSigningEvent.getCorrelationId());
-        assertEquals("TAX_INVOICE", xmlSigningEvent.getDocumentType());
+        // When
+        service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
+
+        // Then - Should save twice: PROCESSING and COMPLETED
+        verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
+    }
+
+    @Test
+    void testProcessInvoiceForSagaDatabaseError() throws Exception {
+        // Given
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
+            .thenThrow(new RuntimeException("Database error"));
+
+        // When / Then
+        assertThrows(RuntimeException.class,
+            () -> service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123"));
+
+        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+    }
+
+    @Test
+    void testProcessInvoiceForSagaReturnsProcessedInvoice() throws Exception {
+        // Given
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
+
+        // When
+        ProcessedTaxInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "corr-1");
+
+        // Then
+        assertNotNull(result);
+        assertEquals("TXN-001", result.getInvoiceNumber());
     }
 
     @Test
@@ -246,77 +264,5 @@ class TaxInvoiceProcessingServiceTest {
         // Then
         assertTrue(result.isEmpty());
         verify(invoiceRepository).findByStatus(status);
-    }
-
-    @Test
-    void testCreateInvoiceDataJson() throws Exception {
-        // Given
-        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
-        when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
-        when(objectMapper.writeValueAsString(any())).thenReturn("{\"invoiceNumber\":\"TXN-001\"}");
-
-        // When
-        service.processInvoiceReceived(validEvent);
-
-        // Then
-        ArgumentCaptor<XmlSigningRequestedEvent> xmlSigningEventCaptor =
-            ArgumentCaptor.forClass(XmlSigningRequestedEvent.class);
-        verify(eventPublisher).publishXmlSigningRequested(xmlSigningEventCaptor.capture());
-
-        XmlSigningRequestedEvent xmlSigningEvent = xmlSigningEventCaptor.getValue();
-        assertNotNull(xmlSigningEvent.getInvoiceDataJson());
-        assertEquals("{\"invoiceNumber\":\"TXN-001\"}", xmlSigningEvent.getInvoiceDataJson());
-    }
-
-    @Test
-    void testCreateInvoiceDataJsonError() throws Exception {
-        // Given
-        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
-        when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
-        when(objectMapper.writeValueAsString(any())).thenThrow(new RuntimeException("JSON error"));
-
-        // When
-        service.processInvoiceReceived(validEvent);
-
-        // Then - Should handle error and use empty JSON
-        ArgumentCaptor<XmlSigningRequestedEvent> xmlSigningEventCaptor =
-            ArgumentCaptor.forClass(XmlSigningRequestedEvent.class);
-        verify(eventPublisher).publishXmlSigningRequested(xmlSigningEventCaptor.capture());
-
-        XmlSigningRequestedEvent xmlSigningEvent = xmlSigningEventCaptor.getValue();
-        assertEquals("{}", xmlSigningEvent.getInvoiceDataJson());
-    }
-
-    @Test
-    void testRepositorySaveCalledThreeTimes() throws Exception {
-        // Given
-        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
-        when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-
-        // When
-        service.processInvoiceReceived(validEvent);
-
-        // Then - Should save 3 times: initial save, after completed, after PDF requested
-        verify(invoiceRepository, times(3)).save(any(ProcessedTaxInvoice.class));
-    }
-
-    @Test
-    void testTransactionalBehavior() throws Exception {
-        // Given
-        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
-        when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new RuntimeException("Database error"));
-
-        // When
-        service.processInvoiceReceived(validEvent);
-
-        // Then - Should not publish events if save fails
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
-        verify(eventPublisher, never()).publishXmlSigningRequested(any());
     }
 }

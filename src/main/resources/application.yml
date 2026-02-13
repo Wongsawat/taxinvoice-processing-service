@@ -57,10 +57,11 @@ app:
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     topics:
-      document-received-taxinvoice: document.received.tax-invoice
       taxinvoice-processed: taxinvoice.processed
-      xml-signing-requested: xml.signing.requested
       dlq: taxinvoice.processing.dlq
+      saga-command-tax-invoice: saga.command.tax-invoice
+      saga-compensation-tax-invoice: saga.compensation.tax-invoice
+      saga-reply-tax-invoice: saga.reply.tax-invoice
 
 # Eureka client configuration
 eureka:

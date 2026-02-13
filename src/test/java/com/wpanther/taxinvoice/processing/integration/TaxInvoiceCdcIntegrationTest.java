@@ -1,7 +1,7 @@
 package com.wpanther.taxinvoice.processing.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReceivedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -32,47 +32,56 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
-        // When — call service directly (no Camel consumer in CDC tests)
-        processingService.processInvoiceReceived(event);
+        // When — call saga handler directly (no Camel consumer in CDC tests)
+        sagaCommandHandler.handleProcessCommand(command);
 
         // Then
         Map<String, Object> invoice = getInvoiceBySourceId(documentId);
         assertThat(invoice).isNotNull();
         assertThat(invoice.get("invoice_number")).isEqualTo(invoiceNumber);
-        assertThat(invoice.get("status")).isEqualTo("PDF_REQUESTED");
+        assertThat(invoice.get("status")).isEqualTo("COMPLETED");
         assertThat(invoice.get("currency")).isEqualTo("THB");
     }
 
     @Test
-    @DisplayName("Should create outbox events entries with correct metadata")
+    @DisplayName("Should create outbox event entries with correct metadata")
     void shouldCreateOutboxEntries() {
         // Given
         String documentId = "DOC-" + UUID.randomUUID();
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
+        String sagaId = "saga-" + correlationId;
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
         // When
-        processingService.processInvoiceReceived(event);
+        sagaCommandHandler.handleProcessCommand(command);
 
-        // Then
+        // Then — verify taxinvoice.processed outbox event
         Map<String, Object> invoice = getInvoiceBySourceId(documentId);
         String invoiceId = invoice.get("id").toString();
 
-        List<Map<String, Object>> outboxEvents = getOutboxEvents(invoiceId);
-        assertThat(outboxEvents).hasSize(2);
+        List<Map<String, Object>> invoiceOutboxEvents = getOutboxEvents(invoiceId);
+        assertThat(invoiceOutboxEvents).hasSize(1);
 
-        // All outbox events should have correct aggregate metadata
-        for (Map<String, Object> outboxEvent : outboxEvents) {
-            assertThat(outboxEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
-            assertThat(outboxEvent.get("aggregate_id")).isEqualTo(invoiceId);
-            assertThat(outboxEvent.get("status")).isEqualTo("PENDING");
-        }
+        Map<String, Object> processedEvent = invoiceOutboxEvents.get(0);
+        assertThat(processedEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
+        assertThat(processedEvent.get("aggregate_id")).isEqualTo(invoiceId);
+        assertThat(processedEvent.get("status")).isEqualTo("PENDING");
+        assertThat(processedEvent.get("topic")).isEqualTo("taxinvoice.processed");
+
+        // Verify saga reply outbox event (uses sagaId as aggregate_id)
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEvents(sagaId);
+        assertThat(sagaOutboxEvents).hasSize(1);
+
+        Map<String, Object> replyEvent = sagaOutboxEvents.get(0);
+        assertThat(replyEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
+        assertThat(replyEvent.get("topic")).isEqualTo("saga.reply.tax-invoice");
+        assertThat(replyEvent.get("status")).isEqualTo("PENDING");
     }
 
     // ========== Outbox Pattern Tests ==========
@@ -85,11 +94,11 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
         // When
-        processingService.processInvoiceReceived(event);
+        sagaCommandHandler.handleProcessCommand(command);
 
         // Then
         Map<String, Object> invoice = getInvoiceBySourceId(documentId);
@@ -108,31 +117,30 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should write XmlSigningRequestedEvent with documentType=TAX_INVOICE")
-    void shouldWriteSigningEventWithDocumentType() {
+    @DisplayName("Should write saga SUCCESS reply to outbox")
+    void shouldWriteSagaSuccessReplyToOutbox() {
         // Given
         String documentId = "DOC-" + UUID.randomUUID();
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
+        String sagaId = "saga-" + correlationId;
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
         // When
-        processingService.processInvoiceReceived(event);
+        sagaCommandHandler.handleProcessCommand(command);
 
         // Then
-        Map<String, Object> invoice = getInvoiceBySourceId(documentId);
-        String invoiceId = invoice.get("id").toString();
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEvents(sagaId);
+        Map<String, Object> replyEvent = sagaOutboxEvents.stream()
+            .filter(e -> "saga.reply.tax-invoice".equals(e.get("topic")))
+            .findFirst().orElseThrow(() -> new AssertionError("No saga.reply.tax-invoice outbox event"));
 
-        List<Map<String, Object>> outboxEvents = getOutboxEvents(invoiceId);
-        Map<String, Object> signingEvent = outboxEvents.stream()
-            .filter(e -> "xml.signing.requested".equals(e.get("topic")))
-            .findFirst().orElseThrow(() -> new AssertionError("No xml.signing.requested outbox event"));
-
-        String payload = (String) signingEvent.get("payload");
-        assertThat(payload).contains("\"documentType\":\"TAX_INVOICE\"");
+        String payload = (String) replyEvent.get("payload");
+        assertThat(payload).contains("SUCCESS");
         assertThat(payload).contains(correlationId);
+        assertThat(replyEvent.get("partition_key")).isEqualTo(sagaId);
     }
 
     // ========== CDC Flow Tests ==========
@@ -145,11 +153,11 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
         // When
-        processingService.processInvoiceReceived(event);
+        sagaCommandHandler.handleProcessCommand(command);
         Map<String, Object> invoice = getInvoiceBySourceId(documentId);
         String invoiceId = invoice.get("id").toString();
 
@@ -168,33 +176,32 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should publish XmlSigningRequestedEvent to Kafka via CDC with TAX_INVOICE type")
-    void shouldPublishSigningEventViaCdc() throws Exception {
+    @DisplayName("Should publish saga SUCCESS reply to Kafka via CDC")
+    void shouldPublishSagaReplyViaCdc() throws Exception {
         // Given
         String documentId = "DOC-" + UUID.randomUUID();
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
+        String sagaId = "saga-" + correlationId;
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
         // When
-        processingService.processInvoiceReceived(event);
-        Map<String, Object> invoice = getInvoiceBySourceId(documentId);
-        String invoiceId = invoice.get("id").toString();
+        sagaCommandHandler.handleProcessCommand(command);
 
-        // Then — await message on xml.signing.requested topic
+        // Then — await message on saga.reply.tax-invoice topic
         await().atMost(2, MINUTES).pollInterval(2, SECONDS)
-               .until(() -> hasMessageOnTopic("xml.signing.requested", invoiceId));
+               .until(() -> hasMessageOnTopic("saga.reply.tax-invoice", sagaId));
 
         List<ConsumerRecord<String, String>> messages =
-            getMessagesFromTopic("xml.signing.requested", invoiceId);
+            getMessagesFromTopic("saga.reply.tax-invoice", sagaId);
         assertThat(messages).isNotEmpty();
 
         JsonNode payload = parseJson(messages.get(0).value());
-        assertThat(payload.get("documentType").asText()).isEqualTo("TAX_INVOICE");
+        assertThat(payload.has("status")).isTrue();
+        assertThat(payload.get("status").asText()).isEqualTo("SUCCESS");
         assertThat(payload.get("correlationId").asText()).isEqualTo(correlationId);
-        assertThat(payload.has("xmlContent")).isTrue();
-        assertThat(payload.has("invoiceDataJson")).isTrue();
+        assertThat(payload.get("sagaId").asText()).isEqualTo(sagaId);
     }
 }

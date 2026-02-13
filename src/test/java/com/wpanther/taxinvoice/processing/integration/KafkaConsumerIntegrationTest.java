@@ -1,6 +1,6 @@
 package com.wpanther.taxinvoice.processing.integration;
 
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReceivedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
 
     @Test
-    @DisplayName("Should process valid tax invoice end-to-end")
+    @DisplayName("Should process valid tax invoice via saga command end-to-end")
     void shouldProcessValidTaxInvoiceEndToEnd() {
         // Given — unique invoice number per test run to avoid conflicts with stale Kafka messages
         String documentId = "DOC-" + UUID.randomUUID();
@@ -27,19 +27,19 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         String correlationId = UUID.randomUUID().toString();
         String xmlContent = getSampleTaxInvoiceXml(invoiceNumber);
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, xmlContent, correlationId);
 
         // When
-        sendEvent("document.received.tax-invoice", documentId, event);
+        sendEvent("saga.command.tax-invoice", documentId, command);
 
-        // Then — await full processing (status = PDF_REQUESTED)
+        // Then — await full processing (status = COMPLETED)
         Map<String, Object> invoice = awaitInvoiceBySourceId(documentId);
 
         // Verify main invoice fields
         assertThat(invoice.get("source_invoice_id")).isEqualTo(documentId);
         assertThat(invoice.get("invoice_number")).isEqualTo(invoiceNumber);
-        assertThat(invoice.get("status")).isEqualTo("PDF_REQUESTED");
+        assertThat(invoice.get("status")).isEqualTo("COMPLETED");
         assertThat(invoice.get("currency")).isEqualTo("THB");
         assertThat(invoice.get("original_xml")).isEqualTo(xmlContent);
         assertThat(invoice.get("issue_date").toString()).contains("2025-01-15");
@@ -91,21 +91,25 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         assertThat(((BigDecimal) invoice.get("total_tax")).compareTo(new BigDecimal("4200.00"))).isZero();
         assertThat(((BigDecimal) invoice.get("total")).compareTo(new BigDecimal("64200.00"))).isZero();
 
-        // Verify outbox events created (2: taxinvoice.processed + xml.signing.requested)
-        awaitOutboxEventCount(invoiceId, 2);
-        List<Map<String, Object>> outboxEvents = getOutboxEvents(invoiceId);
-        assertThat(outboxEvents).hasSize(2);
+        // Verify outbox events created (2: taxinvoice.processed + saga.reply.tax-invoice)
+        String sagaId = "saga-" + correlationId;
+        awaitOutboxEventCount(invoiceId, 1);  // taxinvoice.processed uses invoiceId as aggregate_id
+        List<Map<String, Object>> invoiceOutboxEvents = getOutboxEvents(invoiceId);
+        assertThat(invoiceOutboxEvents).hasSize(1);
 
-        Map<String, Object> processedEvent = outboxEvents.stream()
+        Map<String, Object> processedEvent = invoiceOutboxEvents.stream()
             .filter(e -> "taxinvoice.processed".equals(e.get("topic")))
             .findFirst().orElseThrow(() -> new AssertionError("No taxinvoice.processed outbox event"));
         assertThat(processedEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
 
-        Map<String, Object> signingEvent = outboxEvents.stream()
-            .filter(e -> "xml.signing.requested".equals(e.get("topic")))
-            .findFirst().orElseThrow(() -> new AssertionError("No xml.signing.requested outbox event"));
-        String signingPayload = (String) signingEvent.get("payload");
-        assertThat(signingPayload).contains("TAX_INVOICE");
+        // Saga reply uses sagaId as aggregate_id
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEventsBySagaId(sagaId);
+        assertThat(sagaOutboxEvents).isNotEmpty();
+        Map<String, Object> replyEvent = sagaOutboxEvents.stream()
+            .filter(e -> "saga.reply.tax-invoice".equals(e.get("topic")))
+            .findFirst().orElseThrow(() -> new AssertionError("No saga.reply.tax-invoice outbox event"));
+        String replyPayload = (String) replyEvent.get("payload");
+        assertThat(replyPayload).contains("SUCCESS");
     }
 
     @Test
@@ -117,18 +121,18 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         String correlationId = UUID.randomUUID().toString();
         String xmlContent = getSampleTaxInvoiceXml(invoiceNumber);
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, xmlContent, correlationId);
 
         // When
-        sendEvent("document.received.tax-invoice", documentId, event);
+        sendEvent("saga.command.tax-invoice", documentId, command);
 
         // Then — await processing complete
         Map<String, Object> invoice = awaitInvoiceBySourceId(documentId);
         String invoiceId = invoice.get("id").toString();
 
-        // Await 2 outbox events
-        awaitOutboxEventCount(invoiceId, 2);
+        // Await taxinvoice.processed outbox event
+        awaitOutboxEventCount(invoiceId, 1);
         List<Map<String, Object>> outboxEvents = getOutboxEvents(invoiceId);
 
         // Verify taxinvoice.processed event
@@ -143,17 +147,17 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         assertThat(processedPayload).contains(invoiceNumber);
         assertThat(processedPayload).contains(correlationId);
 
-        // Verify xml.signing.requested event
-        Map<String, Object> signingEvent = outboxEvents.stream()
-            .filter(e -> "xml.signing.requested".equals(e.get("topic")))
-            .findFirst().orElseThrow(() -> new AssertionError("No xml.signing.requested outbox event"));
-        assertThat(signingEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
-        assertThat(signingEvent.get("partition_key")).isEqualTo(invoiceId);
-        assertThat(signingEvent.get("status")).isEqualTo("PENDING");
-        String signingPayload = (String) signingEvent.get("payload");
-        assertThat(signingPayload).contains(invoiceId);
-        assertThat(signingPayload).contains("TAX_INVOICE");
-        assertThat(signingPayload).contains(correlationId);
+        // Verify saga reply event (uses sagaId as aggregate_id)
+        String sagaId = "saga-" + correlationId;
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEventsBySagaId(sagaId);
+        Map<String, Object> replyEvent = sagaOutboxEvents.stream()
+            .filter(e -> "saga.reply.tax-invoice".equals(e.get("topic")))
+            .findFirst().orElseThrow(() -> new AssertionError("No saga.reply.tax-invoice outbox event"));
+        assertThat(replyEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
+        assertThat(replyEvent.get("partition_key")).isEqualTo(sagaId);
+        String replyPayload = (String) replyEvent.get("payload");
+        assertThat(replyPayload).contains("SUCCESS");
+        assertThat(replyPayload).contains(correlationId);
     }
 
     @Test
@@ -165,11 +169,11 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
         // When
-        sendEvent("document.received.tax-invoice", documentId, event);
+        sendEvent("saga.command.tax-invoice", documentId, command);
 
         // Then
         Map<String, Object> invoice = awaitInvoiceBySourceId(documentId);
@@ -180,22 +184,22 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
     }
 
     @Test
-    @DisplayName("Should skip duplicate event with same documentId")
-    void shouldSkipDuplicateEvent() throws Exception {
+    @DisplayName("Should skip duplicate command with same documentId")
+    void shouldSkipDuplicateCommand() throws Exception {
         // Given
         String documentId = "DOC-" + UUID.randomUUID();
         String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
 
-        // When — send same event twice
-        sendEvent("document.received.tax-invoice", documentId, event);
+        // When — send same command twice
+        sendEvent("saga.command.tax-invoice", documentId, command);
         awaitInvoiceBySourceId(documentId);
 
         // Send duplicate
-        sendEvent("document.received.tax-invoice", documentId, event);
+        sendEvent("saga.command.tax-invoice", documentId, command);
 
         // Wait a bit for potential duplicate processing
         Thread.sleep(5000);
@@ -207,8 +211,8 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
     }
 
     @Test
-    @DisplayName("Should process events with different documentIds separately")
-    void shouldProcessEventsWithDifferentDocumentIds() {
+    @DisplayName("Should process commands with different documentIds separately")
+    void shouldProcessCommandsWithDifferentDocumentIds() {
         // Given
         String documentId1 = "DOC-" + UUID.randomUUID();
         String documentId2 = "DOC-" + UUID.randomUUID();
@@ -217,15 +221,15 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         String correlationId1 = UUID.randomUUID().toString();
         String correlationId2 = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event1 = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command1 = createProcessTaxInvoiceCommand(
             documentId1, invoiceNumber1, getSampleTaxInvoiceXml(invoiceNumber1), correlationId1);
 
-        TaxInvoiceReceivedEvent event2 = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command2 = createProcessTaxInvoiceCommand(
             documentId2, invoiceNumber2, getSampleTaxInvoiceXml(invoiceNumber2), correlationId2);
 
         // When
-        sendEvent("document.received.tax-invoice", documentId1, event1);
-        sendEvent("document.received.tax-invoice", documentId2, event2);
+        sendEvent("saga.command.tax-invoice", documentId1, command1);
+        sendEvent("saga.command.tax-invoice", documentId2, command2);
 
         // Then — both processed
         awaitInvoiceBySourceId(documentId1);
@@ -235,40 +239,38 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
     }
 
     @Test
-    @DisplayName("Should not persist for invalid XML")
-    void shouldNotPersistForInvalidXml() {
+    @DisplayName("Should send FAILURE reply for invalid XML")
+    void shouldSendFailureReplyForInvalidXml() {
         // Given
         String documentId = "DOC-" + UUID.randomUUID();
         String invoiceNumber = "TV-INVALID";
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, "<invalid>Not a valid tax invoice</invalid>", correlationId);
 
         // When
-        sendEvent("document.received.tax-invoice", documentId, event);
+        sendEvent("saga.command.tax-invoice", documentId, command);
 
-        // Then — wait and verify no invoice was created
-        // Note: Exception caught silently by processInvoiceReceived — no DLQ
+        // Then — no invoice created, but FAILURE reply sent
         assertNoInvoiceCreatedAfterWait(documentId);
     }
 
     @Test
-    @DisplayName("Should not persist for empty XML")
-    void shouldNotPersistForEmptyXml() {
+    @DisplayName("Should send FAILURE reply for empty XML")
+    void shouldSendFailureReplyForEmptyXml() {
         // Given
         String documentId = "DOC-" + UUID.randomUUID();
         String invoiceNumber = "TV-EMPTY";
         String correlationId = UUID.randomUUID().toString();
 
-        TaxInvoiceReceivedEvent event = createTaxInvoiceReceivedEvent(
+        ProcessTaxInvoiceCommand command = createProcessTaxInvoiceCommand(
             documentId, invoiceNumber, "", correlationId);
 
         // When
-        sendEvent("document.received.tax-invoice", documentId, event);
+        sendEvent("saga.command.tax-invoice", documentId, command);
 
-        // Then
-        // Note: Exception caught silently by processInvoiceReceived — no DLQ
+        // Then — no invoice created
         assertNoInvoiceCreatedAfterWait(documentId);
     }
 }

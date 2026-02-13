@@ -3,8 +3,8 @@ package com.wpanther.taxinvoice.processing.integration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wpanther.taxinvoice.processing.application.service.TaxInvoiceProcessingService;
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReceivedEvent;
+import com.wpanther.taxinvoice.processing.application.service.SagaCommandHandler;
+import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.integration.config.CdcTestConfiguration;
 import com.wpanther.taxinvoice.processing.integration.config.TestKafkaConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -52,7 +52,7 @@ public abstract class AbstractCdcIntegrationTest {
     private static final String CONNECTOR_NAME = "outbox-connector-taxinvoice";
 
     @Autowired
-    protected TaxInvoiceProcessingService processingService;
+    protected SagaCommandHandler sagaCommandHandler;
 
     @Autowired
     protected JdbcTemplate testJdbcTemplate;
@@ -137,7 +137,7 @@ public abstract class AbstractCdcIntegrationTest {
     }
 
     private void subscribeToTopics() {
-        testKafkaConsumer.subscribe(Arrays.asList("taxinvoice.processed", "xml.signing.requested"));
+        testKafkaConsumer.subscribe(Arrays.asList("taxinvoice.processed", "saga.reply.tax-invoice"));
         // Initial poll to trigger partition assignment
         testKafkaConsumer.poll(Duration.ofMillis(500));
     }
@@ -186,16 +186,19 @@ public abstract class AbstractCdcIntegrationTest {
         return results.isEmpty() ? null : results.get(0);
     }
 
-    protected List<Map<String, Object>> getOutboxEvents(String invoiceId) {
+    protected List<Map<String, Object>> getOutboxEvents(String aggregateId) {
         return testJdbcTemplate.queryForList(
-            "SELECT * FROM outbox_events WHERE aggregate_id = ? ORDER BY created_at", invoiceId);
+            "SELECT * FROM outbox_events WHERE aggregate_id = ? ORDER BY created_at", aggregateId);
     }
 
-    // ========== Event Creation Helpers ==========
+    // ========== Command Creation Helpers ==========
 
-    protected TaxInvoiceReceivedEvent createTaxInvoiceReceivedEvent(
+    protected ProcessTaxInvoiceCommand createProcessTaxInvoiceCommand(
             String documentId, String invoiceNumber, String xmlContent, String correlationId) {
-        return new TaxInvoiceReceivedEvent(documentId, invoiceNumber, xmlContent, correlationId);
+        return new ProcessTaxInvoiceCommand(
+            "saga-" + correlationId, "process-tax-invoice", correlationId,
+            documentId, xmlContent, invoiceNumber
+        );
     }
 
     // ========== Test XML Fixtures ==========
