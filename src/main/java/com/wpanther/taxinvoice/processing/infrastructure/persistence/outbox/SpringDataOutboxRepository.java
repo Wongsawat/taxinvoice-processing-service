@@ -17,9 +17,6 @@ public interface SpringDataOutboxRepository extends JpaRepository<OutboxEventEnt
 
     List<OutboxEventEntity> findByStatusOrderByCreatedAtAsc(OutboxStatus status, Pageable pageable);
 
-    @Query("SELECT e FROM OutboxEventEntity e WHERE e.status = 'FAILED' ORDER BY e.createdAt ASC")
-    List<OutboxEventEntity> findFailedEventsOrderByCreatedAtAsc(Pageable pageable);
-
     List<OutboxEventEntity> findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc(
             String aggregateType, String aggregateId);
 

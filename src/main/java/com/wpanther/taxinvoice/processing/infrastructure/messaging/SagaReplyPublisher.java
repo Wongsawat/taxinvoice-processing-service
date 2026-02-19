@@ -1,7 +1,5 @@
 package com.wpanther.taxinvoice.processing.infrastructure.messaging;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReplyEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +23,7 @@ public class SagaReplyPublisher {
     private static final String AGGREGATE_TYPE = "ProcessedTaxInvoice";
 
     private final OutboxService outboxService;
-    private final ObjectMapper objectMapper;
+    private final HeaderSerializer headerSerializer;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishSuccess(String sagaId, String sagaStep, String correlationId) {
@@ -43,13 +41,13 @@ public class SagaReplyPublisher {
             sagaId,
             REPLY_TOPIC,
             sagaId,
-            toJson(headers)
+            headerSerializer.toJson(headers)
         );
 
         log.info("Published SUCCESS saga reply for saga {} step {}", sagaId, sagaStep);
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishFailure(String sagaId, String sagaStep, String correlationId, String errorMessage) {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.failure(sagaId, sagaStep, correlationId, errorMessage);
 
@@ -65,13 +63,13 @@ public class SagaReplyPublisher {
             sagaId,
             REPLY_TOPIC,
             sagaId,
-            toJson(headers)
+            headerSerializer.toJson(headers)
         );
 
         log.info("Published FAILURE saga reply for saga {} step {}: {}", sagaId, sagaStep, errorMessage);
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishCompensated(String sagaId, String sagaStep, String correlationId) {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.compensated(sagaId, sagaStep, correlationId);
 
@@ -87,18 +85,10 @@ public class SagaReplyPublisher {
             sagaId,
             REPLY_TOPIC,
             sagaId,
-            toJson(headers)
+            headerSerializer.toJson(headers)
         );
 
         log.info("Published COMPENSATED saga reply for saga {} step {}", sagaId, sagaStep);
     }
 
-    private String toJson(Map<String, String> map) {
-        try {
-            return objectMapper.writeValueAsString(map);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize headers to JSON", e);
-            return null;
-        }
-    }
 }

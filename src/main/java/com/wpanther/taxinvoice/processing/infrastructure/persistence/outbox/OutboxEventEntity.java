@@ -65,7 +65,6 @@ public class OutboxEventEntity {
 
     @PrePersist
     protected void onCreate() {
-        if (id == null) id = UUID.randomUUID();
         if (status == null) status = OutboxStatus.PENDING;
         if (createdAt == null) createdAt = Instant.now();
         if (retryCount == null) retryCount = 0;
