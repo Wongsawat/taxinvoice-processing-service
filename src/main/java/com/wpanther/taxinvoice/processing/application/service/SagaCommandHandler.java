@@ -53,12 +53,17 @@ public class SagaCommandHandler {
             log.error("Failed to process tax invoice for saga {}: {}",
                 command.getSagaId(), e.getMessage(), e);
 
-            sagaReplyPublisher.publishFailure(
-                command.getSagaId(),
-                command.getSagaStep(),
-                command.getCorrelationId(),
-                e.getMessage()
-            );
+            try {
+                sagaReplyPublisher.publishFailure(
+                    command.getSagaId(),
+                    command.getSagaStep(),
+                    command.getCorrelationId(),
+                    e.getMessage()
+                );
+            } catch (Exception publishEx) {
+                log.error("Failed to publish FAILURE reply for saga {} — orchestrator will not be notified: {}",
+                    command.getSagaId(), publishEx.getMessage(), publishEx);
+            }
         }
     }
 
@@ -94,12 +99,17 @@ public class SagaCommandHandler {
             log.error("Failed to compensate tax invoice for saga {}: {}",
                 command.getSagaId(), e.getMessage(), e);
 
-            sagaReplyPublisher.publishFailure(
-                command.getSagaId(),
-                command.getSagaStep(),
-                command.getCorrelationId(),
-                "Compensation failed: " + e.getMessage()
-            );
+            try {
+                sagaReplyPublisher.publishFailure(
+                    command.getSagaId(),
+                    command.getSagaStep(),
+                    command.getCorrelationId(),
+                    "Compensation failed: " + e.getMessage()
+                );
+            } catch (Exception publishEx) {
+                log.error("Failed to publish FAILURE reply for saga {} compensation — orchestrator will not be notified: {}",
+                    command.getSagaId(), publishEx.getMessage(), publishEx);
+            }
         }
     }
 }

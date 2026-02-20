@@ -353,7 +353,11 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
             throw new TaxInvoiceParsingException("Line item quantity is missing");
         }
         BigDecimal quantityDecimal = delivery.getBilledQuantity().getValue();
-        int quantity = quantityDecimal.intValue();
+        if (quantityDecimal.stripTrailingZeros().scale() > 0) {
+            throw new TaxInvoiceParsingException(
+                "Line item quantity must be a whole number, got: " + quantityDecimal);
+        }
+        int quantity = quantityDecimal.intValueExact();
 
         // Extract unit price
         LineTradeAgreementType agreement = jaxbItem.getSpecifiedLineTradeAgreement();

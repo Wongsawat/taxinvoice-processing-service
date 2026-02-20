@@ -69,7 +69,7 @@ public class SagaReplyPublisher {
         log.info("Published FAILURE saga reply for saga {} step {}: {}", sagaId, sagaStep, errorMessage);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void publishCompensated(String sagaId, String sagaStep, String correlationId) {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.compensated(sagaId, sagaStep, correlationId);
 

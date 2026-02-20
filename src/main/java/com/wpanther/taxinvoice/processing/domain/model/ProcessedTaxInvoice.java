@@ -44,9 +44,9 @@ public class ProcessedTaxInvoice {
     private String errorMessage;
 
     // Cached totals (calculated on demand)
-    private transient Money cachedSubtotal;
-    private transient Money cachedTotalTax;
-    private transient Money cachedTotal;
+    private transient volatile Money cachedSubtotal;
+    private transient volatile Money cachedTotalTax;
+    private transient volatile Money cachedTotal;
 
     private ProcessedTaxInvoice(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "Tax Invoice ID is required");
