@@ -3,8 +3,8 @@ package com.wpanther.taxinvoice.processing.application.service;
 import com.wpanther.taxinvoice.processing.domain.event.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
+import com.wpanther.taxinvoice.processing.domain.port.SagaReplyPort;
 import com.wpanther.taxinvoice.processing.domain.repository.ProcessedTaxInvoiceRepository;
-import com.wpanther.taxinvoice.processing.infrastructure.messaging.SagaReplyPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ import java.util.Optional;
 public class SagaCommandHandler {
 
     private final TaxInvoiceProcessingService processingService;
-    private final SagaReplyPublisher sagaReplyPublisher;
+    private final SagaReplyPort sagaReplyPublisher;
     private final ProcessedTaxInvoiceRepository invoiceRepository;
 
     /**

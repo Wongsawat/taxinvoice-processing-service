@@ -9,7 +9,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * JPA Entity for ProcessedTaxInvoice aggregate
@@ -96,12 +100,5 @@ public class ProcessedTaxInvoiceEntity {
     public void addLineItem(TaxInvoiceLineItemEntity lineItem) {
         lineItems.add(lineItem);
         lineItem.setInvoice(this);
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
     }
 }

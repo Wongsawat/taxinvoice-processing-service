@@ -76,6 +76,15 @@ public class ProcessedTaxInvoiceMapper {
             items.add(toLineItemDomain(itemEntity, entity.getCurrency()));
         }
 
+        if (seller == null) {
+            throw new IllegalStateException(
+                "No SELLER party found for invoice " + entity.getId());
+        }
+        if (buyer == null) {
+            throw new IllegalStateException(
+                "No BUYER party found for invoice " + entity.getId());
+        }
+
         // Build domain object
         return ProcessedTaxInvoice.builder()
             .id(TaxInvoiceId.from(entity.getId().toString()))

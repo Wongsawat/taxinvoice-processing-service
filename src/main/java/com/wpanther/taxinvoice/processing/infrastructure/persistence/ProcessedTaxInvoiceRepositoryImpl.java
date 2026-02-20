@@ -30,26 +30,21 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     public ProcessedTaxInvoice save(ProcessedTaxInvoice invoice) {
         log.debug("Saving processed tax invoice: {}", invoice.getInvoiceNumber());
 
-        // Check if entity already exists (update case for state transitions)
-        Optional<ProcessedTaxInvoiceEntity> existingOpt =
-            jpaRepository.findByIdWithDetails(invoice.getId().value());
-
-        ProcessedTaxInvoiceEntity saved;
-        if (existingOpt.isPresent()) {
-            // Update only mutable fields — children (parties, line items) don't change
-            ProcessedTaxInvoiceEntity existing = existingOpt.get();
+        UUID id = invoice.getId().value();
+        if (jpaRepository.existsById(id)) {
+            // Update only mutable fields — parties and line items never change after creation
+            ProcessedTaxInvoiceEntity existing = jpaRepository.getReferenceById(id);
             existing.setStatus(invoice.getStatus());
             existing.setErrorMessage(invoice.getErrorMessage());
             existing.setCompletedAt(invoice.getCompletedAt());
-            saved = jpaRepository.save(existing);
+            jpaRepository.save(existing);
         } else {
             // New entity — full mapping
-            ProcessedTaxInvoiceEntity entity = mapper.toEntity(invoice);
-            saved = jpaRepository.save(entity);
+            jpaRepository.save(mapper.toEntity(invoice));
         }
 
-        log.info("Saved processed tax invoice: {} with ID: {}", saved.getInvoiceNumber(), saved.getId());
-        return mapper.toDomain(saved);
+        log.info("Saved processed tax invoice: {} with ID: {}", invoice.getInvoiceNumber(), id);
+        return invoice;
     }
 
     @Override

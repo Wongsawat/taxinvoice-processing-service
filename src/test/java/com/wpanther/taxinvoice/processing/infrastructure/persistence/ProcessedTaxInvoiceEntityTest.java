@@ -148,33 +148,6 @@ class ProcessedTaxInvoiceEntityTest {
     }
 
     @Test
-    void testPrePersistGeneratesId() {
-        // Given
-        ProcessedTaxInvoiceEntity entity = new ProcessedTaxInvoiceEntity();
-        assertNull(entity.getId());
-
-        // When
-        entity.onCreate();
-
-        // Then
-        assertNotNull(entity.getId(), "ID should be generated on create");
-    }
-
-    @Test
-    void testPrePersistDoesNotOverrideExistingId() {
-        // Given
-        UUID existingId = UUID.randomUUID();
-        ProcessedTaxInvoiceEntity entity = new ProcessedTaxInvoiceEntity();
-        entity.setId(existingId);
-
-        // When
-        entity.onCreate();
-
-        // Then
-        assertEquals(existingId, entity.getId(), "Existing ID should not be overridden");
-    }
-
-    @Test
     void testAllArgsConstructor() {
         // Given
         UUID id = UUID.randomUUID();

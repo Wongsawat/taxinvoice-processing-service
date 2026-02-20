@@ -39,7 +39,7 @@ public class SagaRouteConfig extends RouteBuilder {
     public void configure() throws Exception {
 
         // Global error handler - Dead Letter Channel with retries
-        errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=" + kafkaBrokers)
+        errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=RAW(" + kafkaBrokers + ")")
             .maximumRedeliveries(3)
             .redeliveryDelay(1000)
             .useExponentialBackOff()
@@ -52,7 +52,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // CONSUMER ROUTE: saga.command.tax-invoice (from orchestrator)
         // ============================================================
         from("kafka:" + sagaCommandTopic
-                + "?brokers=" + kafkaBrokers
+                + "?brokers=RAW(" + kafkaBrokers + ")"
                 + "&groupId=taxinvoice-processing-service"
                 + "&autoOffsetReset=earliest"
                 + "&autoCommitEnable=false"
@@ -74,7 +74,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // CONSUMER ROUTE: saga.compensation.tax-invoice (from orchestrator)
         // ============================================================
         from("kafka:" + sagaCompensationTopic
-                + "?brokers=" + kafkaBrokers
+                + "?brokers=RAW(" + kafkaBrokers + ")"
                 + "&groupId=taxinvoice-processing-service"
                 + "&autoOffsetReset=earliest"
                 + "&autoCommitEnable=false"

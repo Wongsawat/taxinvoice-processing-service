@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.infrastructure.messaging;
 
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceReplyEvent;
+import com.wpanther.taxinvoice.processing.domain.port.SagaReplyPort;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class SagaReplyPublisher {
+public class SagaReplyPublisher implements SagaReplyPort {
 
     private static final String REPLY_TOPIC = "saga.reply.tax-invoice";
     private static final String AGGREGATE_TYPE = "ProcessedTaxInvoice";

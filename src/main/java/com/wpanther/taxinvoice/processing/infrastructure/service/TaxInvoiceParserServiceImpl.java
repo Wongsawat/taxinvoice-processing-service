@@ -70,6 +70,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
 
             // Step 3: Map to domain model
             LocalDate issueDate = extractIssueDate(document);
+            String currency = extractCurrency(transaction);
 
             ProcessedTaxInvoice invoice = ProcessedTaxInvoice.builder()
                 .id(TaxInvoiceId.generate())
@@ -79,8 +80,8 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
                 .dueDate(extractDueDate(transaction, issueDate))
                 .seller(extractSeller(transaction))
                 .buyer(extractBuyer(transaction))
-                .items(extractLineItems(transaction))
-                .currency(extractCurrency(transaction))
+                .items(extractLineItems(transaction, currency))
+                .currency(currency)
                 .originalXml(xmlContent)
                 .build();
 
@@ -307,7 +308,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
     /**
      * Extract line items
      */
-    private List<LineItem> extractLineItems(SupplyChainTradeTransactionType transaction)
+    private List<LineItem> extractLineItems(SupplyChainTradeTransactionType transaction, String currency)
             throws TaxInvoiceParsingException {
 
         List<SupplyChainTradeLineItemType> jaxbItems =
@@ -318,7 +319,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
         }
 
         List<LineItem> items = new ArrayList<>();
-        String currency = extractCurrency(transaction);
 
         for (int i = 0; i < jaxbItems.size(); i++) {
             try {

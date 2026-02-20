@@ -24,7 +24,7 @@ public class HeaderSerializer {
             return objectMapper.writeValueAsString(headers);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize outbox headers to JSON", e);
-            return null;
+            return "{}";
         }
     }
 }

@@ -3,9 +3,9 @@ package com.wpanther.taxinvoice.processing.application.service;
 import com.wpanther.taxinvoice.processing.domain.event.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.model.*;
+import com.wpanther.taxinvoice.processing.domain.port.SagaReplyPort;
 import com.wpanther.taxinvoice.processing.domain.repository.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
-import com.wpanther.taxinvoice.processing.infrastructure.messaging.SagaReplyPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +27,7 @@ class SagaCommandHandlerTest {
     private TaxInvoiceProcessingService processingService;
 
     @Mock
-    private SagaReplyPublisher sagaReplyPublisher;
+    private SagaReplyPort sagaReplyPublisher;
 
     @Mock
     private ProcessedTaxInvoiceRepository invoiceRepository;
