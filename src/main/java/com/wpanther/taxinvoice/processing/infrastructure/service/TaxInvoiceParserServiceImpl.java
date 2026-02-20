@@ -1,6 +1,12 @@
 package com.wpanther.taxinvoice.processing.infrastructure.service;
 
-import com.wpanther.taxinvoice.processing.domain.model.*;
+import com.wpanther.taxinvoice.processing.domain.model.Address;
+import com.wpanther.taxinvoice.processing.domain.model.LineItem;
+import com.wpanther.taxinvoice.processing.domain.model.Money;
+import com.wpanther.taxinvoice.processing.domain.model.Party;
+import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
+import com.wpanther.taxinvoice.processing.domain.model.TaxIdentifier;
+import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
 import com.wpanther.etax.generated.taxinvoice.ram.*;
 import com.wpanther.etax.generated.taxinvoice.rsm.TaxInvoice_CrossIndustryInvoiceType;
