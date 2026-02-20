@@ -87,8 +87,9 @@ class SagaRouteConfigTest {
         String json = objectMapper.writeValueAsString(command);
 
         // When
-        ProducerTemplate producer = camelContext.createProducerTemplate();
-        producer.sendBody("direct:saga-command", json);
+        try (ProducerTemplate producer = camelContext.createProducerTemplate()) {
+            producer.sendBody("direct:saga-command", json);
+        }
 
         // Then
         verify(sagaCommandHandler).handleProcessCommand(any(ProcessTaxInvoiceCommand.class));
@@ -104,8 +105,9 @@ class SagaRouteConfigTest {
         String json = objectMapper.writeValueAsString(command);
 
         // When
-        ProducerTemplate producer = camelContext.createProducerTemplate();
-        producer.sendBody("direct:saga-compensation", json);
+        try (ProducerTemplate producer = camelContext.createProducerTemplate()) {
+            producer.sendBody("direct:saga-compensation", json);
+        }
 
         // Then
         verify(sagaCommandHandler).handleCompensation(any(CompensateTaxInvoiceCommand.class));

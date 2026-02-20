@@ -95,7 +95,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
                 sourceInvoiceId, e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("Unexpected error parsing tax invoice XML for source ID " + sourceInvoiceId, e);
+            log.error("Unexpected error parsing tax invoice XML for source ID {}", sourceInvoiceId, e);
             throw new TaxInvoiceParsingException("Unexpected error during tax invoice parsing", e);
         }
     }
