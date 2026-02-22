@@ -10,7 +10,6 @@ import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
 import com.wpanther.etax.generated.taxinvoice.ram.*;
 import com.wpanther.etax.generated.taxinvoice.rsm.TaxInvoice_CrossIndustryInvoiceType;
-import com.wpanther.etax.generated.taxinvoice.rsm.impl.TaxInvoice_CrossIndustryInvoiceTypeImpl;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
@@ -35,7 +34,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
 
     private final JAXBContext jaxbContext;
 
-    public TaxInvoiceParserServiceImpl() throws TaxInvoiceParsingException {
+    public TaxInvoiceParserServiceImpl() {
         try {
             // Initialize JAXB context with the implementation package
             // The teda library uses interface/implementation pattern with a custom JAXBContextFactory
@@ -49,7 +48,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
             log.info("JAXB context initialized successfully for Thai e-Tax tax invoice parsing");
         } catch (JAXBException e) {
             log.error("Failed to initialize JAXB context", e);
-            throw new TaxInvoiceParsingException("Failed to initialize XML parser", e);
+            throw new IllegalStateException("Failed to initialize XML parser", e);
         }
     }
 
@@ -100,9 +99,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
             log.error("Failed to parse tax invoice XML for source ID {}: {}",
                 sourceInvoiceId, e.getMessage());
             throw e;
-        } catch (Exception e) {
-            log.error("Unexpected error parsing tax invoice XML for source ID {}", sourceInvoiceId, e);
-            throw new TaxInvoiceParsingException("Unexpected error during tax invoice parsing", e);
         }
     }
 
@@ -176,9 +172,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
             throws TaxInvoiceParsingException {
 
         HeaderTradeSettlementType settlement = transaction.getApplicableHeaderTradeSettlement();
-        if (settlement == null) {
-            throw new TaxInvoiceParsingException("Trade settlement information is missing");
-        }
 
         // Due date might be in payment terms
         List<TradePaymentTermsType> paymentTerms = settlement.getSpecifiedTradePaymentTerms();
@@ -420,9 +413,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserService {
      * Convert XMLGregorianCalendar to LocalDate
      */
     private LocalDate convertXMLGregorianCalendarToLocalDate(XMLGregorianCalendar calendar) {
-        if (calendar == null) {
-            return null;
-        }
         return LocalDate.of(
             calendar.getYear(),
             calendar.getMonth(),

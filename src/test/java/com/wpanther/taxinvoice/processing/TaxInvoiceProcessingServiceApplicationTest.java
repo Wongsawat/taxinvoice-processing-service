@@ -1,6 +1,8 @@
 package com.wpanther.taxinvoice.processing;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
@@ -9,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * Tests for TaxInvoiceProcessingServiceApplication
@@ -50,5 +54,18 @@ class TaxInvoiceProcessingServiceApplicationTest {
             "Application class should have @SpringBootApplication annotation");
         assertNotNull(TaxInvoiceProcessingServiceApplication.class.getAnnotation(EnableDiscoveryClient.class),
             "Application class should have @EnableDiscoveryClient annotation");
+    }
+
+    @Test
+    void testMainMethodInvokesSpringApplicationRun() {
+        try (MockedStatic<SpringApplication> springApp = mockStatic(SpringApplication.class)) {
+            springApp.when(() -> SpringApplication.run(any(Class.class), any(String[].class)))
+                .thenReturn(null);
+
+            TaxInvoiceProcessingServiceApplication.main(new String[]{});
+
+            springApp.verify(() ->
+                SpringApplication.run(TaxInvoiceProcessingServiceApplication.class, new String[]{}));
+        }
     }
 }

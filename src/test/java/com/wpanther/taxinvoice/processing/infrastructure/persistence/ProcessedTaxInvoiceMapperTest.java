@@ -386,4 +386,40 @@ class ProcessedTaxInvoiceMapperTest {
             assertEquals(i + 1, items.get(i).getLineNumber());
         }
     }
+
+    @Test
+    void toDomain_whenNoSellerParty_throwsIllegalStateException() {
+        ProcessedTaxInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        // Remove seller, keep only buyer
+        entity.getParties().removeIf(p -> p.getPartyType() == TaxInvoicePartyEntity.PartyType.SELLER);
+
+        assertThrows(IllegalStateException.class, () -> mapper.toDomain(entity));
+    }
+
+    @Test
+    void toDomain_whenNoBuyerParty_throwsIllegalStateException() {
+        ProcessedTaxInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        // Remove buyer, keep only seller
+        entity.getParties().removeIf(p -> p.getPartyType() == TaxInvoicePartyEntity.PartyType.BUYER);
+
+        assertThrows(IllegalStateException.class, () -> mapper.toDomain(entity));
+    }
+
+    @Test
+    void toDomain_withNullTaxIdOnParty_returnsPartyWithNullTaxIdentifier() {
+        // Given
+        ProcessedTaxInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        entity.getParties().stream()
+            .filter(p -> p.getPartyType() == TaxInvoicePartyEntity.PartyType.SELLER)
+            .forEach(p -> {
+                p.setTaxId(null);
+                p.setTaxIdScheme(null);
+            });
+
+        // When
+        ProcessedTaxInvoice result = mapper.toDomain(entity);
+
+        // Then
+        assertNull(result.getSeller().taxIdentifier());
+    }
 }

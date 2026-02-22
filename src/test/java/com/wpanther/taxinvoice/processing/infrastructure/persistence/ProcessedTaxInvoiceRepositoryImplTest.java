@@ -273,4 +273,36 @@ class ProcessedTaxInvoiceRepositoryImplTest {
         assertEquals("Test error message", found.get().getErrorMessage());
         assertNotNull(found.get().getCompletedAt());
     }
+
+    @Test
+    void testFindByInvoiceNumber_found() {
+        ProcessedTaxInvoice saved = repository.save(testInvoice);
+        Optional<ProcessedTaxInvoice> found = repository.findByInvoiceNumber(saved.getInvoiceNumber());
+        assertTrue(found.isPresent());
+        assertEquals(saved.getInvoiceNumber(), found.get().getInvoiceNumber());
+    }
+
+    @Test
+    void testFindByInvoiceNumber_notFound() {
+        Optional<ProcessedTaxInvoice> found = repository.findByInvoiceNumber("NON-EXISTENT");
+        assertFalse(found.isPresent());
+    }
+
+    @Test
+    void testExistsByInvoiceNumber_whenExists() {
+        ProcessedTaxInvoice saved = repository.save(testInvoice);
+        assertTrue(repository.existsByInvoiceNumber(saved.getInvoiceNumber()));
+    }
+
+    @Test
+    void testExistsByInvoiceNumber_whenNotExists() {
+        assertFalse(repository.existsByInvoiceNumber("NON-EXISTENT"));
+    }
+
+    @Test
+    void testDeleteById() {
+        ProcessedTaxInvoice saved = repository.save(testInvoice);
+        repository.deleteById(saved.getId());
+        assertFalse(repository.findById(saved.getId()).isPresent());
+    }
 }

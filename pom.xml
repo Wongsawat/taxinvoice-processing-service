@@ -297,14 +297,11 @@
                             <rules>
                                 <rule>
                                     <element>PACKAGE</element>
-                                    <excludes>
-                                        <exclude>com.wpanther.taxinvoice.processing</exclude>
-                                    </excludes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.80</minimum>
+                                            <minimum>1.0</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -142,5 +143,25 @@ class SagaCommandHandlerTest {
             contains("Compensation failed")
         );
         verify(sagaReplyPublisher, never()).publishCompensated(any(), any(), any());
+    }
+
+    @Test
+    void testHandleProcessCommand_whenPublishFailureAlsoThrows_swallowsException() throws Exception {
+        when(processingService.processInvoiceForSaga(anyString(), anyString(), anyString()))
+            .thenThrow(new RuntimeException("Process error"));
+        doThrow(new RuntimeException("Publish failure error"))
+            .when(sagaReplyPublisher).publishFailure(any(), any(), any(), any());
+
+        assertDoesNotThrow(() -> handler.handleProcessCommand(validCommand));
+    }
+
+    @Test
+    void testHandleCompensation_whenPublishFailureAlsoThrows_swallowsException() {
+        when(invoiceRepository.findBySourceInvoiceId("doc-1")).thenReturn(Optional.of(validInvoice));
+        doThrow(new RuntimeException("Delete failed")).when(invoiceRepository).deleteById(any());
+        doThrow(new RuntimeException("Publish failure error"))
+            .when(sagaReplyPublisher).publishFailure(any(), any(), any(), any());
+
+        assertDoesNotThrow(() -> handler.handleCompensation(compensateCommand));
     }
 }

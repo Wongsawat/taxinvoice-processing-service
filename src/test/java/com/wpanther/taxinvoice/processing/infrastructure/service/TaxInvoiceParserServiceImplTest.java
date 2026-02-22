@@ -2,13 +2,21 @@ package com.wpanther.taxinvoice.processing.infrastructure.service;
 
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBException;
+import jakarta.xml.bind.Unmarshaller;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
+import java.io.Reader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for TaxInvoiceParserServiceImpl
@@ -18,8 +26,35 @@ class TaxInvoiceParserServiceImplTest {
     private TaxInvoiceParserService parserService;
 
     @BeforeEach
-    void setUp() throws TaxInvoiceParserService.TaxInvoiceParsingException {
+    void setUp() {
         parserService = new TaxInvoiceParserServiceImpl();
+    }
+
+    @Test
+    void constructor_whenJaxbContextFails_throwsIllegalStateException() throws Exception {
+        try (MockedStatic<JAXBContext> mockedJaxb = mockStatic(JAXBContext.class)) {
+            mockedJaxb.when(() -> JAXBContext.newInstance(anyString()))
+                .thenThrow(new JAXBException("Simulated JAXB failure"));
+            assertThrows(IllegalStateException.class, () -> new TaxInvoiceParserServiceImpl());
+        }
+    }
+
+    @Test
+    void parseInvoice_whenUnmarshalReturnsUnexpectedType_throwsException() throws Exception {
+        try (MockedStatic<JAXBContext> mockedJaxb = mockStatic(JAXBContext.class)) {
+            JAXBContext mockContext = mock(JAXBContext.class);
+            Unmarshaller mockUnmarshaller = mock(Unmarshaller.class);
+            mockedJaxb.when(() -> JAXBContext.newInstance(anyString())).thenReturn(mockContext);
+            when(mockContext.createUnmarshaller()).thenReturn(mockUnmarshaller);
+            when(mockUnmarshaller.unmarshal(any(Reader.class))).thenReturn("unexpected-string-type");
+
+            TaxInvoiceParserServiceImpl service = new TaxInvoiceParserServiceImpl();
+            TaxInvoiceParserService.TaxInvoiceParsingException ex = assertThrows(
+                TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> service.parseInvoice("<test/>", "test-id")
+            );
+            assertTrue(ex.getMessage().contains("Unexpected root element"));
+        }
     }
 
     @Test
@@ -351,6 +386,108 @@ class TaxInvoiceParserServiceImplTest {
                 () -> parserService.parseInvoice(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Seller country"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithMissingExchangedDocument() {
+        String xmlContent = getTaxInvoiceXmlWithoutExchangedDocument();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("ExchangedDocument"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithMissingSupplyChainTradeTransaction() {
+        String xmlContent = getTaxInvoiceXmlWithoutSupplyChainTradeTransaction();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("SupplyChainTradeTransaction"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithSellerEmail() throws TaxInvoiceParserService.TaxInvoiceParsingException {
+        String xmlContent = getTaxInvoiceXmlWithSellerEmail();
+        ProcessedTaxInvoice invoice = parserService.parseInvoice(xmlContent, "test-email");
+        assertEquals("seller@acme.com", invoice.getSeller().email());
+    }
+
+    @Test
+    void testParseTaxInvoiceWithMissingSellerTaxRegistration() {
+        String xmlContent = getTaxInvoiceXmlWithoutSellerTaxRegistration();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("tax registration"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithMissingSellerAddress() {
+        String xmlContent = getTaxInvoiceXmlWithoutSellerAddress();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("address"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithLineItemMissingProductName() {
+        String xmlContent = getTaxInvoiceXmlWithLineItemMissingProduct();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("line item"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithLineItemMissingDelivery() {
+        String xmlContent = getTaxInvoiceXmlWithLineItemMissingDelivery();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("line item"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithFractionalQuantity() {
+        String xmlContent = getTaxInvoiceXmlWithFractionalQuantity();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("whole number") || exception.getMessage().contains("line item"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithLineItemMissingAgreement() {
+        String xmlContent = getTaxInvoiceXmlWithLineItemMissingAgreement();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("line item"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithLineItemEmptyChargeAmount() {
+        String xmlContent = getTaxInvoiceXmlWithLineItemEmptyChargeAmount();
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("line item"));
+    }
+
+    @Test
+    void testParseTaxInvoiceWithSellerTaxRegistrationNoId() {
+        // Given: XML where SpecifiedTaxRegistration exists but has no ID child element
+        // This triggers the taxReg.getID() == null check
+        String xmlContent = getTaxInvoiceXmlWithSellerTaxRegistrationNoId();
+
+        // When/Then: Should throw TaxInvoiceParsingException about missing tax ID
+        TaxInvoiceParserService.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+
+        assertTrue(exception.getMessage().contains("tax ID") || exception.getMessage().contains("tax registration"));
     }
 
     /**
@@ -1146,5 +1283,262 @@ class TaxInvoiceParserServiceImplTest {
               </rsm:SupplyChainTradeTransaction>
             </rsm:TaxInvoice_CrossIndustryInvoice>
             """;
+    }
+
+    private static final String NS_HEADER = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <rsm:TaxInvoice_CrossIndustryInvoice
+            xmlns:rsm="urn:etda:uncefact:data:standard:TaxInvoice_CrossIndustryInvoice:2"
+            xmlns:ram="urn:etda:uncefact:data:standard:TaxInvoice_ReusableAggregateBusinessInformationEntity:2"
+            xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:16"
+            xmlns:qdt="urn:etda:uncefact:data:standard:QualifiedDataType:1">
+        """;
+
+    private static final String STANDARD_SELLER = """
+          <ram:SellerTradeParty>
+            <ram:Name>Acme Corporation Ltd.</ram:Name>
+            <ram:PostalTradeAddress>
+              <ram:LineOne>123 Business Street</ram:LineOne>
+              <ram:CityName>Bangkok</ram:CityName>
+              <ram:PostcodeCode>10110</ram:PostcodeCode>
+              <ram:CountryID>TH</ram:CountryID>
+            </ram:PostalTradeAddress>
+            <ram:SpecifiedTaxRegistration>
+              <ram:ID schemeID="VAT">1234567890123</ram:ID>
+            </ram:SpecifiedTaxRegistration>
+          </ram:SellerTradeParty>
+        """;
+
+    private static final String STANDARD_BUYER = """
+          <ram:BuyerTradeParty>
+            <ram:Name>Customer Company Ltd.</ram:Name>
+            <ram:PostalTradeAddress>
+              <ram:LineOne>456 Customer Road</ram:LineOne>
+              <ram:CityName>Chiang Mai</ram:CityName>
+              <ram:PostcodeCode>50000</ram:PostcodeCode>
+              <ram:CountryID>TH</ram:CountryID>
+            </ram:PostalTradeAddress>
+            <ram:SpecifiedTaxRegistration>
+              <ram:ID>9876543210987</ram:ID>
+            </ram:SpecifiedTaxRegistration>
+          </ram:BuyerTradeParty>
+        """;
+
+    private static final String STANDARD_SETTLEMENT = """
+          <ram:ApplicableHeaderTradeSettlement>
+            <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
+          </ram:ApplicableHeaderTradeSettlement>
+        """;
+
+    private static final String STANDARD_LINE_ITEM = """
+          <ram:IncludedSupplyChainTradeLineItem>
+            <ram:SpecifiedTradeProduct>
+              <ram:Name>Professional Services</ram:Name>
+            </ram:SpecifiedTradeProduct>
+            <ram:SpecifiedLineTradeAgreement>
+              <ram:GrossPriceProductTradePrice>
+                <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+              </ram:GrossPriceProductTradePrice>
+            </ram:SpecifiedLineTradeAgreement>
+            <ram:SpecifiedLineTradeDelivery>
+              <ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>
+            </ram:SpecifiedLineTradeDelivery>
+          </ram:IncludedSupplyChainTradeLineItem>
+        """;
+
+    private String buildXml(String exchangedDocument, String supplyChain) {
+        return NS_HEADER + (exchangedDocument != null ? exchangedDocument : "") +
+               (supplyChain != null ? supplyChain : "") +
+               "</rsm:TaxInvoice_CrossIndustryInvoice>";
+    }
+
+    private String standardExchangedDocument() {
+        return """
+          <rsm:ExchangedDocument>
+            <ram:ID>TV2025-TEST</ram:ID>
+            <ram:IssueDateTime>2025-01-15T00:00:00</ram:IssueDateTime>
+          </rsm:ExchangedDocument>
+          """;
+    }
+
+    private String standardSupplyChain(String sellerOverride) {
+        return """
+          <rsm:SupplyChainTradeTransaction>
+            <ram:ApplicableHeaderTradeAgreement>
+          """ + (sellerOverride != null ? sellerOverride : STANDARD_SELLER) + STANDARD_BUYER + """
+            </ram:ApplicableHeaderTradeAgreement>
+          """ + STANDARD_SETTLEMENT + STANDARD_LINE_ITEM + """
+          </rsm:SupplyChainTradeTransaction>
+          """;
+    }
+
+    private String standardSupplyChainWithLineItem(String lineItemOverride) {
+        return """
+          <rsm:SupplyChainTradeTransaction>
+            <ram:ApplicableHeaderTradeAgreement>
+          """ + STANDARD_SELLER + STANDARD_BUYER + """
+            </ram:ApplicableHeaderTradeAgreement>
+          """ + STANDARD_SETTLEMENT + lineItemOverride + """
+          </rsm:SupplyChainTradeTransaction>
+          """;
+    }
+
+    private String getTaxInvoiceXmlWithoutExchangedDocument() {
+        return buildXml(null, standardSupplyChain(null));
+    }
+
+    private String getTaxInvoiceXmlWithoutSupplyChainTradeTransaction() {
+        return buildXml(standardExchangedDocument(), null);
+    }
+
+    private String getTaxInvoiceXmlWithSellerEmail() {
+        String sellerWithEmail = """
+            <ram:SellerTradeParty>
+              <ram:Name>Acme Corporation Ltd.</ram:Name>
+              <ram:PostalTradeAddress>
+                <ram:LineOne>123 Business Street</ram:LineOne>
+                <ram:CityName>Bangkok</ram:CityName>
+                <ram:PostcodeCode>10110</ram:PostcodeCode>
+                <ram:CountryID>TH</ram:CountryID>
+              </ram:PostalTradeAddress>
+              <ram:SpecifiedTaxRegistration>
+                <ram:ID schemeID="VAT">1234567890123</ram:ID>
+              </ram:SpecifiedTaxRegistration>
+              <ram:DefinedTradeContact>
+                <ram:EmailURIUniversalCommunication>
+                  <ram:URIID>seller@acme.com</ram:URIID>
+                </ram:EmailURIUniversalCommunication>
+              </ram:DefinedTradeContact>
+            </ram:SellerTradeParty>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChain(sellerWithEmail));
+    }
+
+    private String getTaxInvoiceXmlWithoutSellerTaxRegistration() {
+        String sellerNoReg = """
+            <ram:SellerTradeParty>
+              <ram:Name>Acme Corporation Ltd.</ram:Name>
+              <ram:PostalTradeAddress>
+                <ram:LineOne>123 Business Street</ram:LineOne>
+                <ram:CityName>Bangkok</ram:CityName>
+                <ram:PostcodeCode>10110</ram:PostcodeCode>
+                <ram:CountryID>TH</ram:CountryID>
+              </ram:PostalTradeAddress>
+            </ram:SellerTradeParty>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChain(sellerNoReg));
+    }
+
+    private String getTaxInvoiceXmlWithoutSellerAddress() {
+        String sellerNoAddress = """
+            <ram:SellerTradeParty>
+              <ram:Name>Acme Corporation Ltd.</ram:Name>
+              <ram:SpecifiedTaxRegistration>
+                <ram:ID schemeID="VAT">1234567890123</ram:ID>
+              </ram:SpecifiedTaxRegistration>
+            </ram:SellerTradeParty>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChain(sellerNoAddress));
+    }
+
+    private String getTaxInvoiceXmlWithLineItemMissingProduct() {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedLineTradeAgreement>
+                <ram:GrossPriceProductTradePrice>
+                  <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                </ram:GrossPriceProductTradePrice>
+              </ram:SpecifiedLineTradeAgreement>
+              <ram:SpecifiedLineTradeDelivery>
+                <ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>
+              </ram:SpecifiedLineTradeDelivery>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithLineItemMissingDelivery() {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedTradeProduct>
+                <ram:Name>Professional Services</ram:Name>
+              </ram:SpecifiedTradeProduct>
+              <ram:SpecifiedLineTradeAgreement>
+                <ram:GrossPriceProductTradePrice>
+                  <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                </ram:GrossPriceProductTradePrice>
+              </ram:SpecifiedLineTradeAgreement>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithFractionalQuantity() {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedTradeProduct>
+                <ram:Name>Professional Services</ram:Name>
+              </ram:SpecifiedTradeProduct>
+              <ram:SpecifiedLineTradeAgreement>
+                <ram:GrossPriceProductTradePrice>
+                  <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                </ram:GrossPriceProductTradePrice>
+              </ram:SpecifiedLineTradeAgreement>
+              <ram:SpecifiedLineTradeDelivery>
+                <ram:BilledQuantity unitCode="C62">1.5</ram:BilledQuantity>
+              </ram:SpecifiedLineTradeDelivery>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithLineItemMissingAgreement() {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedTradeProduct>
+                <ram:Name>Professional Services</ram:Name>
+              </ram:SpecifiedTradeProduct>
+              <ram:SpecifiedLineTradeDelivery>
+                <ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>
+              </ram:SpecifiedLineTradeDelivery>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithLineItemEmptyChargeAmount() {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedTradeProduct>
+                <ram:Name>Professional Services</ram:Name>
+              </ram:SpecifiedTradeProduct>
+              <ram:SpecifiedLineTradeAgreement>
+                <ram:GrossPriceProductTradePrice>
+                </ram:GrossPriceProductTradePrice>
+              </ram:SpecifiedLineTradeAgreement>
+              <ram:SpecifiedLineTradeDelivery>
+                <ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>
+              </ram:SpecifiedLineTradeDelivery>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithSellerTaxRegistrationNoId() {
+        // SpecifiedTaxRegistration present but no ID element — triggers taxReg.getID() == null
+        String sellerNoId = """
+            <ram:SellerTradeParty>
+              <ram:Name>Acme Corporation Ltd.</ram:Name>
+              <ram:PostalTradeAddress>
+                <ram:LineOne>123 Business Street</ram:LineOne>
+                <ram:CityName>Bangkok</ram:CityName>
+                <ram:PostcodeCode>10110</ram:PostcodeCode>
+                <ram:CountryID>TH</ram:CountryID>
+              </ram:PostalTradeAddress>
+              <ram:SpecifiedTaxRegistration>
+              </ram:SpecifiedTaxRegistration>
+            </ram:SellerTradeParty>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChain(sellerNoId));
     }
 }
