@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -13,12 +14,12 @@ class ProcessTaxInvoiceCommandTest {
     @Test
     void testConvenienceConstructor() {
         ProcessTaxInvoiceCommand cmd = new ProcessTaxInvoiceCommand(
-            "saga-1", "process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "doc-1", "<xml>test</xml>", "TV-001"
         );
 
         assertEquals("saga-1", cmd.getSagaId());
-        assertEquals("process-tax-invoice", cmd.getSagaStep());
+        assertEquals(SagaStep.PROCESS_TAX_INVOICE, cmd.getSagaStep());
         assertEquals("corr-1", cmd.getCorrelationId());
         assertEquals("doc-1", cmd.getDocumentId());
         assertEquals("<xml>test</xml>", cmd.getXmlContent());
@@ -34,7 +35,7 @@ class ProcessTaxInvoiceCommandTest {
 
         ProcessTaxInvoiceCommand cmd = new ProcessTaxInvoiceCommand(
             eventId, occurredAt, "ProcessTaxInvoiceCommand", 1,
-            "saga-1", "process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "doc-1", "<xml>test</xml>", "TV-001"
         );
 
@@ -51,7 +52,7 @@ class ProcessTaxInvoiceCommandTest {
         objectMapper.findAndRegisterModules();
 
         ProcessTaxInvoiceCommand original = new ProcessTaxInvoiceCommand(
-            "saga-1", "process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "doc-1", "<xml>test</xml>", "TV-001"
         );
 
@@ -74,14 +75,17 @@ class ProcessTaxInvoiceCommandTest {
         );
 
         assertNull(cmd.getSagaId());
+        assertNull(cmd.getSagaStep());
+        assertNull(cmd.getCorrelationId());
         assertNull(cmd.getDocumentId());
         assertNull(cmd.getXmlContent());
+        assertNull(cmd.getInvoiceNumber());
     }
 
     @Test
     void testEventType() {
         ProcessTaxInvoiceCommand cmd = new ProcessTaxInvoiceCommand(
-            "saga-1", "process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "doc-1", "<xml/>", "TV-001"
         );
 

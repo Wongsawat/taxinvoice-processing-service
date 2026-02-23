@@ -99,7 +99,7 @@ public class OutboxEventEntity {
                 .createdAt(this.createdAt)
                 .publishedAt(this.publishedAt)
                 .status(this.status)
-                .retryCount(this.retryCount)
+                .retryCount(this.retryCount != null ? this.retryCount : 0)
                 .errorMessage(this.errorMessage)
                 .topic(this.topic)
                 .partitionKey(this.partitionKey)

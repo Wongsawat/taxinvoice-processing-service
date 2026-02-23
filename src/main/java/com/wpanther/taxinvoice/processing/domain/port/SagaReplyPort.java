@@ -1,14 +1,15 @@
 package com.wpanther.taxinvoice.processing.domain.port;
 
+import com.wpanther.saga.domain.enums.SagaStep;
+
 /**
- * Output port for publishing saga reply messages.
- * Decouples SagaCommandHandler (application layer) from Kafka/Outbox infrastructure.
+ * Port for publishing saga reply events.
  */
 public interface SagaReplyPort {
 
-    void publishSuccess(String sagaId, String sagaStep, String correlationId);
+    void publishSuccess(String sagaId, SagaStep sagaStep, String correlationId);
 
-    void publishFailure(String sagaId, String sagaStep, String correlationId, String errorMessage);
+    void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage);
 
-    void publishCompensated(String sagaId, String sagaStep, String correlationId);
+    void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId);
 }

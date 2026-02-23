@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.domain.event;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -9,7 +10,7 @@ class TaxInvoiceReplyEventTest {
 
     @Test
     void testSuccessReply() {
-        TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.success("saga-1", "process-tax-invoice", "corr-1");
+        TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.success("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
 
         assertTrue(reply.isSuccess());
         assertFalse(reply.isFailure());
@@ -17,14 +18,14 @@ class TaxInvoiceReplyEventTest {
         assertEquals(ReplyStatus.SUCCESS, reply.getStatus());
         assertNull(reply.getErrorMessage());
         assertEquals("saga-1", reply.getSagaId());
-        assertEquals("process-tax-invoice", reply.getSagaStep());
+        assertEquals(SagaStep.PROCESS_TAX_INVOICE, reply.getSagaStep());
         assertEquals("corr-1", reply.getCorrelationId());
     }
 
     @Test
     void testFailureReply() {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.failure(
-            "saga-1", "process-tax-invoice", "corr-1", "Parse error"
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1", "Parse error"
         );
 
         assertFalse(reply.isSuccess());
@@ -38,7 +39,7 @@ class TaxInvoiceReplyEventTest {
     @Test
     void testCompensatedReply() {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.compensated(
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1"
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1"
         );
 
         assertFalse(reply.isSuccess());
@@ -50,7 +51,7 @@ class TaxInvoiceReplyEventTest {
 
     @Test
     void testInheritedFields() {
-        TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.success("saga-1", "step-1", "corr-1");
+        TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.success("saga-1", SagaStep.SIGN_XML, "corr-1");
 
         assertNotNull(reply.getEventId());
         assertNotNull(reply.getOccurredAt());
@@ -59,8 +60,8 @@ class TaxInvoiceReplyEventTest {
 
     @Test
     void testDifferentSagaIds() {
-        TaxInvoiceReplyEvent reply1 = TaxInvoiceReplyEvent.success("saga-1", "step-1", "corr-1");
-        TaxInvoiceReplyEvent reply2 = TaxInvoiceReplyEvent.success("saga-2", "step-1", "corr-2");
+        TaxInvoiceReplyEvent reply1 = TaxInvoiceReplyEvent.success("saga-1", SagaStep.SIGN_XML, "corr-1");
+        TaxInvoiceReplyEvent reply2 = TaxInvoiceReplyEvent.success("saga-2", SagaStep.SIGN_PDF, "corr-2");
 
         assertNotEquals(reply1.getSagaId(), reply2.getSagaId());
         assertNotEquals(reply1.getCorrelationId(), reply2.getCorrelationId());

@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.processing.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.application.service.SagaCommandHandler;
 import com.wpanther.taxinvoice.processing.domain.event.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
@@ -81,7 +82,7 @@ class SagaRouteConfigTest {
     void shouldProcessSagaCommand() throws Exception {
         // Given
         ProcessTaxInvoiceCommand command = new ProcessTaxInvoiceCommand(
-            "saga-1", "process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "doc-1", "<xml>test</xml>", "TV-001"
         );
         String json = objectMapper.writeValueAsString(command);
@@ -99,7 +100,7 @@ class SagaRouteConfigTest {
     void shouldProcessCompensationCommand() throws Exception {
         // Given
         CompensateTaxInvoiceCommand command = new CompensateTaxInvoiceCommand(
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "process-tax-invoice", "doc-1", "tax-invoice"
         );
         String json = objectMapper.writeValueAsString(command);

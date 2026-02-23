@@ -1,5 +1,6 @@
 package com.wpanther.taxinvoice.processing.application.service;
 
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.domain.event.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.domain.model.*;
@@ -43,12 +44,12 @@ class SagaCommandHandlerTest {
     @BeforeEach
     void setUp() {
         validCommand = new ProcessTaxInvoiceCommand(
-            "saga-1", "process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "doc-1", "<xml>test</xml>", "TV-001"
         );
 
         compensateCommand = new CompensateTaxInvoiceCommand(
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "process-tax-invoice", "doc-1", "tax-invoice"
         );
 
@@ -84,7 +85,7 @@ class SagaCommandHandlerTest {
         handler.handleProcessCommand(validCommand);
 
         verify(processingService).processInvoiceForSaga("doc-1", "<xml>test</xml>", "corr-1");
-        verify(sagaReplyPublisher).publishSuccess("saga-1", "process-tax-invoice", "corr-1");
+        verify(sagaReplyPublisher).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
         verify(sagaReplyPublisher, never()).publishFailure(any(), any(), any(), any());
     }
 
@@ -95,7 +96,7 @@ class SagaCommandHandlerTest {
 
         handler.handleProcessCommand(validCommand);
 
-        verify(sagaReplyPublisher).publishFailure("saga-1", "process-tax-invoice", "corr-1", "Parse error");
+        verify(sagaReplyPublisher).publishFailure("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1", "Parse error");
         verify(sagaReplyPublisher, never()).publishSuccess(any(), any(), any());
     }
 
@@ -106,7 +107,7 @@ class SagaCommandHandlerTest {
 
         handler.handleProcessCommand(validCommand);
 
-        verify(sagaReplyPublisher).publishFailure("saga-1", "process-tax-invoice", "corr-1", "DB error");
+        verify(sagaReplyPublisher).publishFailure("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1", "DB error");
         verify(sagaReplyPublisher, never()).publishSuccess(any(), any(), any());
     }
 
@@ -117,7 +118,7 @@ class SagaCommandHandlerTest {
         handler.handleCompensation(compensateCommand);
 
         verify(invoiceRepository).deleteById(validInvoice.getId());
-        verify(sagaReplyPublisher).publishCompensated("saga-1", "COMPENSATE_process-tax-invoice", "corr-1");
+        verify(sagaReplyPublisher).publishCompensated("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
         verify(sagaReplyPublisher, never()).publishFailure(any(), any(), any(), any());
     }
 
@@ -128,7 +129,7 @@ class SagaCommandHandlerTest {
         handler.handleCompensation(compensateCommand);
 
         verify(invoiceRepository, never()).deleteById(any());
-        verify(sagaReplyPublisher).publishCompensated("saga-1", "COMPENSATE_process-tax-invoice", "corr-1");
+        verify(sagaReplyPublisher).publishCompensated("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
     }
 
     @Test
@@ -139,7 +140,7 @@ class SagaCommandHandlerTest {
         handler.handleCompensation(compensateCommand);
 
         verify(sagaReplyPublisher).publishFailure(
-            eq("saga-1"), eq("COMPENSATE_process-tax-invoice"), eq("corr-1"),
+            eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("corr-1"),
             contains("Compensation failed")
         );
         verify(sagaReplyPublisher, never()).publishCompensated(any(), any(), any());

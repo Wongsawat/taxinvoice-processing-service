@@ -265,11 +265,14 @@ class JpaOutboxEventRepositoryTest {
     void testJpaRepositorySave() {
         // Given
         OutboxEvent event = OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType("ProcessedTaxInvoice")
                 .aggregateId(UUID.randomUUID().toString())
                 .eventType("taxinvoice.processed")
                 .payload("{\"test\": \"data\"}")
+                .createdAt(Instant.now())
                 .status(OutboxStatus.PENDING)
+                .retryCount(0)
                 .topic("taxinvoice.processed")
                 .partitionKey("invoice-123")
                 .headers("{\"correlationId\": \"test-123\"}")
@@ -290,11 +293,14 @@ class JpaOutboxEventRepositoryTest {
     void testJpaRepositoryFindById() {
         // Given
         OutboxEvent event = OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType("ProcessedTaxInvoice")
                 .aggregateId(UUID.randomUUID().toString())
                 .eventType("taxinvoice.processed")
                 .payload("{\"test\": \"data\"}")
+                .createdAt(Instant.now())
                 .status(OutboxStatus.PENDING)
+                .retryCount(0)
                 .topic("taxinvoice.processed")
                 .partitionKey("invoice-123")
                 .headers("{\"correlationId\": \"test-123\"}")
@@ -349,28 +355,32 @@ class JpaOutboxEventRepositoryTest {
         // Given
         Instant baseTime = Instant.now();
         OutboxEvent oldEvent = OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType("ProcessedTaxInvoice")
                 .aggregateId(UUID.randomUUID().toString())
                 .eventType("taxinvoice.processed")
                 .payload("{\"test\": \"data\"}")
+                .createdAt(baseTime.minusSeconds(3700))
+                .publishedAt(baseTime.minusSeconds(3600))
                 .status(OutboxStatus.PUBLISHED)
+                .retryCount(0)
                 .topic("taxinvoice.processed")
                 .partitionKey("invoice-123")
                 .headers("{\"correlationId\": \"test-123\"}")
-                .publishedAt(baseTime.minusSeconds(3600))
-                .createdAt(baseTime.minusSeconds(3700))
                 .build();
         OutboxEvent recentEvent = OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType("ProcessedTaxInvoice")
                 .aggregateId(UUID.randomUUID().toString())
                 .eventType("taxinvoice.processed")
                 .payload("{\"test\": \"data2\"}")
+                .createdAt(baseTime.minusSeconds(200))
+                .publishedAt(baseTime.minusSeconds(100))
                 .status(OutboxStatus.PUBLISHED)
+                .retryCount(0)
                 .topic("taxinvoice.processed")
                 .partitionKey("invoice-456")
                 .headers("{\"correlationId\": \"test-456\"}")
-                .publishedAt(baseTime.minusSeconds(100))
-                .createdAt(baseTime.minusSeconds(200))
                 .build();
         jpaOutboxEventRepository.save(oldEvent);
         jpaOutboxEventRepository.save(recentEvent);
@@ -388,21 +398,27 @@ class JpaOutboxEventRepositoryTest {
         String aggregateId = UUID.randomUUID().toString();
         String aggregateType = "ProcessedTaxInvoice";
         OutboxEvent event1 = OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType(aggregateType)
                 .aggregateId(aggregateId)
                 .eventType("taxinvoice.processed")
                 .payload("{\"test\": \"data\"}")
+                .createdAt(Instant.now())
                 .status(OutboxStatus.PENDING)
+                .retryCount(0)
                 .topic("taxinvoice.processed")
                 .partitionKey("invoice-123")
                 .headers("{\"correlationId\": \"test-123\"}")
                 .build();
         OutboxEvent event2 = OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType(aggregateType)
                 .aggregateId(aggregateId)
                 .eventType("xml.signing.requested")
                 .payload("{\"test\": \"data2\"}")
+                .createdAt(Instant.now())
                 .status(OutboxStatus.PUBLISHED)
+                .retryCount(0)
                 .topic("xml.signing.requested")
                 .partitionKey("invoice-123")
                 .headers("{\"correlationId\": \"test-123\"}")
@@ -419,15 +435,17 @@ class JpaOutboxEventRepositoryTest {
 
     private OutboxEvent createDomainOutboxEvent(OutboxStatus status, Instant createdAt) {
         return OutboxEvent.builder()
+                .id(UUID.randomUUID())
                 .aggregateType("ProcessedTaxInvoice")
                 .aggregateId(UUID.randomUUID().toString())
                 .eventType("taxinvoice.processed")
                 .payload("{\"test\": \"data\"}")
+                .createdAt(createdAt)
                 .status(status)
+                .retryCount(0)
                 .topic("taxinvoice.processed")
                 .partitionKey("invoice-123")
                 .headers("{\"correlationId\": \"test-123\"}")
-                .createdAt(createdAt)
                 .build();
     }
 }

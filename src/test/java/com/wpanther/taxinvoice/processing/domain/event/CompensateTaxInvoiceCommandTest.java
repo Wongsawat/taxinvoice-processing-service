@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -13,12 +14,12 @@ class CompensateTaxInvoiceCommandTest {
     @Test
     void testConvenienceConstructor() {
         CompensateTaxInvoiceCommand cmd = new CompensateTaxInvoiceCommand(
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "process-tax-invoice", "doc-1", "tax-invoice"
         );
 
         assertEquals("saga-1", cmd.getSagaId());
-        assertEquals("COMPENSATE_process-tax-invoice", cmd.getSagaStep());
+        assertEquals(SagaStep.PROCESS_TAX_INVOICE, cmd.getSagaStep());
         assertEquals("corr-1", cmd.getCorrelationId());
         assertEquals("process-tax-invoice", cmd.getStepToCompensate());
         assertEquals("doc-1", cmd.getDocumentId());
@@ -34,7 +35,7 @@ class CompensateTaxInvoiceCommandTest {
 
         CompensateTaxInvoiceCommand cmd = new CompensateTaxInvoiceCommand(
             eventId, occurredAt, "CompensationCommand", 1,
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "process-tax-invoice", "doc-1", "tax-invoice"
         );
 
@@ -50,7 +51,7 @@ class CompensateTaxInvoiceCommandTest {
         objectMapper.findAndRegisterModules();
 
         CompensateTaxInvoiceCommand original = new CompensateTaxInvoiceCommand(
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "process-tax-invoice", "doc-1", "tax-invoice"
         );
 
@@ -59,6 +60,7 @@ class CompensateTaxInvoiceCommandTest {
 
         assertEquals(original.getEventId(), deserialized.getEventId());
         assertEquals(original.getSagaId(), deserialized.getSagaId());
+        assertEquals(original.getSagaStep(), deserialized.getSagaStep());
         assertEquals(original.getStepToCompensate(), deserialized.getStepToCompensate());
         assertEquals(original.getDocumentId(), deserialized.getDocumentId());
         assertEquals(original.getDocumentType(), deserialized.getDocumentType());
@@ -67,7 +69,7 @@ class CompensateTaxInvoiceCommandTest {
     @Test
     void testEventType() {
         CompensateTaxInvoiceCommand cmd = new CompensateTaxInvoiceCommand(
-            "saga-1", "COMPENSATE_process-tax-invoice", "corr-1",
+            "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1",
             "process-tax-invoice", "doc-1", "tax-invoice"
         );
 
