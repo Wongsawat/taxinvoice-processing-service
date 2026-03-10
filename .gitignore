@@ -60,3 +60,4 @@ application-local.properties
 
 # Claude Code guidance
 CLAUDE.md
+.worktrees/
