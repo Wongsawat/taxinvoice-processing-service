@@ -1,6 +1,6 @@
 package com.wpanther.taxinvoice.processing.domain.model;
 
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
+import com.wpanther.taxinvoice.processing.application.event.TaxInvoiceProcessedDomainEvent;
 
 import java.time.Instant;
 import java.time.LocalDate;

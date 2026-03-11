@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.processing.domain.event;
+package com.wpanther.taxinvoice.processing.application.event;
 
 import com.wpanther.taxinvoice.processing.domain.model.Money;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
@@ -6,9 +6,9 @@ import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import java.time.Instant;
 
 /**
- * Domain event raised by ProcessedTaxInvoice when processing completes.
+ * Application event raised when a tax invoice is processed.
  * Pure Java record — no framework or Kafka dependencies.
- * The application layer translates this into a Kafka DTO via TaxInvoiceEventPublishingPort.
+ * The application layer publishes this via TaxInvoiceEventPublishingPort.
  */
 public record TaxInvoiceProcessedDomainEvent(
     TaxInvoiceId invoiceId,
