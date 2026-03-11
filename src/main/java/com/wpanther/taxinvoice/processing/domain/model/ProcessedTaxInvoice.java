@@ -1,8 +1,5 @@
 package com.wpanther.taxinvoice.processing.domain.model;
 
-import com.wpanther.taxinvoice.processing.application.event.TaxInvoiceProcessedDomainEvent;
-
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -50,9 +47,6 @@ public class ProcessedTaxInvoice {
     private transient volatile Money cachedSubtotal;
     private transient volatile Money cachedTotalTax;
     private transient volatile Money cachedTotal;
-
-    // Domain events raised by this aggregate
-    private final List<Object> domainEvents = new ArrayList<>();
 
     private ProcessedTaxInvoice(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "Tax Invoice ID is required");
@@ -155,15 +149,6 @@ public class ProcessedTaxInvoice {
         }
         this.status = ProcessingStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
-
-        // Raise domain event
-        domainEvents.add(new TaxInvoiceProcessedDomainEvent(
-            id,
-            invoiceNumber,
-            getTotal(),
-            correlationId,
-            Instant.now()
-        ));
     }
 
     /**
@@ -230,22 +215,6 @@ public class ProcessedTaxInvoice {
 
     public String getErrorMessage() {
         return errorMessage;
-    }
-
-    /**
-     * Returns domain events raised by this aggregate.
-     * The application layer should drain and handle these events.
-     */
-    public List<Object> domainEvents() {
-        return Collections.unmodifiableList(domainEvents);
-    }
-
-    /**
-     * Clears domain events after they have been handled.
-     * Should be called by the application layer after processing events.
-     */
-    public void clearDomainEvents() {
-        domainEvents.clear();
     }
 
     /**
