@@ -14,10 +14,10 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for EventPublisher
+ * Unit tests for TaxInvoiceEventPublisher
  */
 @ExtendWith(MockitoExtension.class)
-class EventPublisherTest {
+class TaxInvoiceEventPublisherTest {
 
     @Mock
     private OutboxService outboxService;
@@ -25,11 +25,11 @@ class EventPublisherTest {
     @Mock
     private HeaderSerializer headerSerializer;
 
-    private EventPublisher eventPublisher;
+    private TaxInvoiceEventPublisher eventPublisher;
 
     @BeforeEach
     void setUp() {
-        eventPublisher = new EventPublisher(outboxService, headerSerializer);
+        eventPublisher = new TaxInvoiceEventPublisher(outboxService, headerSerializer);
     }
 
     @Test

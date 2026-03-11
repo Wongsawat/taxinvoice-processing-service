@@ -12,13 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 /**
- * Event publisher - driven adapter that publishes events to Kafka via outbox pattern.
+ * Tax Invoice Event Publisher - driven adapter that publishes events to Kafka via outbox pattern.
  * Implements TaxInvoiceEventPublishingPort to adhere to hexagonal architecture.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class EventPublisher implements TaxInvoiceEventPublishingPort {
+public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
 
     private final OutboxService outboxService;
     private final HeaderSerializer headerSerializer;
