@@ -141,8 +141,9 @@ public class ProcessedTaxInvoice {
 
     /**
      * Mark invoice processing as completed
+     * @param correlationId the correlation ID for the saga
      */
-    public void markCompleted() {
+    public void markCompleted(String correlationId) {
         if (status != ProcessingStatus.PROCESSING) {
             throw new IllegalStateException("Can only complete from PROCESSING status");
         }

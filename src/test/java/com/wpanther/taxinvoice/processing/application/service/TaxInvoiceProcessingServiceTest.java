@@ -1,10 +1,13 @@
 package com.wpanther.taxinvoice.processing.application.service;
 
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
+import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
+import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.*;
-import com.wpanther.taxinvoice.processing.domain.repository.ProcessedTaxInvoiceRepository;
-import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
-import com.wpanther.taxinvoice.processing.infrastructure.messaging.EventPublisher;
+import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
+import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +24,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -33,10 +38,13 @@ class TaxInvoiceProcessingServiceTest {
     private ProcessedTaxInvoiceRepository invoiceRepository;
 
     @Mock
-    private TaxInvoiceParserService parserService;
+    private TaxInvoiceParserPort parserService;
 
     @Mock
-    private EventPublisher eventPublisher;
+    private TaxInvoiceEventPublishingPort eventPublisher;
+
+    @Mock
+    private SagaReplyPort sagaReplyPort;
 
     @InjectMocks
     private TaxInvoiceProcessingService service;
@@ -82,18 +90,18 @@ class TaxInvoiceProcessingServiceTest {
     void testProcessInvoiceForSagaSuccess() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
 
         // When
-        ProcessedTaxInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
 
         // Then
-        assertNotNull(result);
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
-        verify(parserService).parseInvoice("<xml>test</xml>", "intake-123");
+        verify(parserService).parse("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher).publishTaxInvoiceProcessed(any(TaxInvoiceProcessedEvent.class));
+        verify(eventPublisher).publish(any(TaxInvoiceProcessedEvent.class));
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
     }
 
     @Test
@@ -102,47 +110,49 @@ class TaxInvoiceProcessingServiceTest {
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(validInvoice));
 
         // When
-        ProcessedTaxInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
 
-        // Then
-        assertNotNull(result);
-        assertEquals(validInvoice, result);
+        // Then - idempotent: should return early without processing
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
-        verify(parserService, never()).parseInvoice(anyString(), anyString());
+        verify(parserService, never()).parse(anyString(), anyString());
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+        verify(eventPublisher, never()).publish(any());
+        // For idempotent case, saga reply is still published
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
     }
 
     @Test
     void testProcessInvoiceForSagaParsingError() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString()))
-            .thenThrow(new TaxInvoiceParserService.TaxInvoiceParsingException("Parse error"));
+        when(parserService.parse(anyString(), anyString()))
+            .thenThrow(new TaxInvoiceParserPort.TaxInvoiceParsingException("Parse error"));
 
-        // When / Then
-        assertThrows(TaxInvoiceParserService.TaxInvoiceParsingException.class,
-            () -> service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123"));
+        // When / Then - the service wraps TaxInvoiceParsingException in TaxInvoiceProcessingException
+        assertThrows(ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException.class,
+            () -> service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
 
-        verify(parserService).parseInvoice("<xml>test</xml>", "intake-123");
+        verify(parserService).parse("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+        verify(eventPublisher, never()).publish(any());
+        // Verify failure reply is published
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("correlation-123"), contains("Parse error"));
     }
 
     @Test
     void testProcessInvoiceForSagaPublishesCorrectEvent() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
 
         // When
-        service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
 
         // Then
         ArgumentCaptor<TaxInvoiceProcessedEvent> eventCaptor =
             ArgumentCaptor.forClass(TaxInvoiceProcessedEvent.class);
-        verify(eventPublisher).publishTaxInvoiceProcessed(eventCaptor.capture());
+        verify(eventPublisher).publish(eventCaptor.capture());
 
         TaxInvoiceProcessedEvent processedEvent = eventCaptor.getValue();
         assertEquals("TXN-001", processedEvent.getInvoiceNumber());
@@ -154,11 +164,11 @@ class TaxInvoiceProcessingServiceTest {
     void testProcessInvoiceForSagaSavesTwice() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
 
         // When
-        service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
 
         // Then - Should save twice: PROCESSING and COMPLETED
         verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
@@ -168,30 +178,33 @@ class TaxInvoiceProcessingServiceTest {
     void testProcessInvoiceForSagaDatabaseError() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
             .thenThrow(new RuntimeException("Database error"));
 
         // When / Then
         assertThrows(RuntimeException.class,
-            () -> service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123"));
+            () -> service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
 
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+        verify(eventPublisher, never()).publish(any());
     }
 
     @Test
     void testProcessInvoiceForSagaReturnsProcessedInvoice() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
-        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class))).thenReturn(validInvoice);
 
         // When
-        ProcessedTaxInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "corr-1");
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
 
         // Then
-        assertNotNull(result);
-        assertEquals("TXN-001", result.getInvoiceNumber());
+        // Verify processing was successful by checking repository calls
+        verify(invoiceRepository).findBySourceInvoiceId("intake-123");
+        verify(parserService).parse("<xml>test</xml>", "intake-123");
+        verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
     }
 
     @Test
@@ -264,5 +277,77 @@ class TaxInvoiceProcessingServiceTest {
         // Then
         assertTrue(result.isEmpty());
         verify(invoiceRepository).findByStatus(status);
+    }
+
+    @Test
+    void testCompensateDeletesExistingInvoice() {
+        // Given
+        TaxInvoiceId id = TaxInvoiceId.generate();
+        Party seller = Party.of(
+            "Seller Company",
+            TaxIdentifier.of("1234567890", "VAT"),
+            new Address("123 Street", "Bangkok", "10110", "TH")
+        );
+        Party buyer = Party.of(
+            "Buyer Company",
+            TaxIdentifier.of("9876543210", "VAT"),
+            new Address("456 Road", "Chiang Mai", "50000", "TH")
+        );
+        LineItem item = new LineItem(
+            "Service 1",
+            10,
+            Money.of(1000.00, "THB"),
+            new BigDecimal("7.00")
+        );
+        validInvoice = ProcessedTaxInvoice.builder()
+            .id(id)
+            .sourceInvoiceId("intake-123")
+            .invoiceNumber("TXN-001")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .seller(seller)
+            .buyer(buyer)
+            .addItem(item)
+            .currency("THB")
+            .originalXml("<xml>test</xml>")
+            .build();
+        when(invoiceRepository.findBySourceInvoiceId("intake-123")).thenReturn(Optional.of(validInvoice));
+
+        // When
+        service.compensate("intake-123", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+
+        // Then
+        verify(invoiceRepository).findBySourceInvoiceId("intake-123");
+        verify(invoiceRepository).deleteById(id);
+        verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+    }
+
+    @Test
+    void testCompensateNotFound() {
+        // Given
+        when(invoiceRepository.findBySourceInvoiceId("intake-notfound")).thenReturn(Optional.empty());
+
+        // When
+        service.compensate("intake-notfound", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+
+        // Then
+        verify(invoiceRepository).findBySourceInvoiceId("intake-notfound");
+        verify(invoiceRepository, never()).deleteById(any());
+        verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+    }
+
+    @Test
+    void testCompensateHandlesException() {
+        // Given
+        when(invoiceRepository.findBySourceInvoiceId("intake-123")).thenReturn(Optional.of(validInvoice));
+        doThrow(new RuntimeException("DB error")).when(invoiceRepository).deleteById(any());
+
+        // When
+        service.compensate("intake-123", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+
+        // Then
+        verify(invoiceRepository).findBySourceInvoiceId("intake-123");
+        verify(invoiceRepository).deleteById(any());
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("corr-1"), contains("Compensation failed"));
     }
 }

@@ -1,12 +1,16 @@
 package com.wpanther.taxinvoice.processing.application.service;
 
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
+import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.processing.application.port.in.CompensateTaxInvoiceUseCase;
+import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
+import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;
-import com.wpanther.taxinvoice.processing.domain.repository.ProcessedTaxInvoiceRepository;
-import com.wpanther.taxinvoice.processing.domain.service.TaxInvoiceParserService;
-import com.wpanther.taxinvoice.processing.infrastructure.messaging.EventPublisher;
+import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
+import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,39 +21,51 @@ import java.util.Optional;
 
 /**
  * Application service for tax invoice processing.
- * Processes tax invoices as part of the saga orchestrator pattern.
+ * Implements inbound ports for processing and compensation.
+ * Uses outbound ports via TaxInvoiceEventPublishingPort for event publishing and SagaReplyPort for saga replies.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TaxInvoiceProcessingService {
+public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, CompensateTaxInvoiceUseCase {
 
     private final ProcessedTaxInvoiceRepository invoiceRepository;
-    private final TaxInvoiceParserService parserService;
-    private final EventPublisher eventPublisher;
+    private final TaxInvoiceParserPort parserService;
+    private final TaxInvoiceEventPublishingPort eventPublisher;
+    private final SagaReplyPort sagaReplyPort;
 
     /**
      * Process tax invoice as part of a saga command.
      * Parses XML, validates, calculates totals, saves to DB, publishes notification event.
-     * Does NOT publish xml.signing.requested (orchestrator handles next step).
-     *
-     * @throws TaxInvoiceParserService.TaxInvoiceParsingException on parse failure
      */
+    @Override
     @Transactional
-    public ProcessedTaxInvoice processInvoiceForSaga(String documentId, String xmlContent,
-                                                      String correlationId)
-            throws TaxInvoiceParserService.TaxInvoiceParsingException {
+    public void process(String documentId, String xmlContent,
+                         String sagaId, SagaStep sagaStep, String correlationId) throws TaxInvoiceProcessingException {
+        try {
+            processInvoiceForSagaInternal(documentId, xmlContent, sagaId, sagaStep, correlationId);
+        } catch (TaxInvoiceParserPort.TaxInvoiceParsingException e) {
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.getMessage());
+            throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.getMessage(), e);
+        }
+    }
+
+    private ProcessedTaxInvoice processInvoiceForSagaInternal(String documentId, String xmlContent,
+                                                            String sagaId, SagaStep sagaStep, String correlationId)
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
         log.info("Processing tax invoice for saga, document: {}", documentId);
 
         // Idempotency check
         Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
         if (existing.isPresent()) {
             log.warn("Tax invoice already processed for document {}, returning existing", documentId);
+            // Still publish success for idempotent case
+            sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
             return existing.get();
         }
 
         // Parse XML to domain model
-        ProcessedTaxInvoice invoice = parserService.parseInvoice(xmlContent, documentId);
+        ProcessedTaxInvoice invoice = parserService.parse(xmlContent, documentId);
 
         // State: PENDING → PROCESSING
         invoice.startProcessing();
@@ -57,7 +73,7 @@ public class TaxInvoiceProcessingService {
         log.info("Saved processed tax invoice: {}", saved.getInvoiceNumber());
 
         // State: PROCESSING → COMPLETED
-        saved.markCompleted();
+        saved.markCompleted(correlationId);
         invoiceRepository.save(saved);
 
         // Publish notification event (kept for notification-service)
@@ -68,10 +84,37 @@ public class TaxInvoiceProcessingService {
             saved.getCurrency(),
             correlationId
         );
-        eventPublisher.publishTaxInvoiceProcessed(processedEvent);
+        eventPublisher.publish(processedEvent);
+
+        // Publish saga success reply
+        sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
 
         log.info("Successfully processed tax invoice: {}", saved.getInvoiceNumber());
         return saved;
+    }
+
+    /**
+     * Compensate/rollback a previously processed tax invoice.
+     */
+    @Override
+    @Transactional
+    public void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId) {
+        log.info("Compensating tax invoice for document: {}", documentId);
+
+        try {
+            Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
+            if (existing.isPresent()) {
+                invoiceRepository.deleteById(existing.get().getId());
+                log.info("Deleted tax invoice for document: {}", documentId);
+            } else {
+                log.warn("Tax invoice not found for compensation: {}", documentId);
+            }
+
+            sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
+        } catch (Exception e) {
+            log.error("Failed to compensate tax invoice for saga {}: {}", sagaId, e.getMessage(), e);
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Compensation failed: " + e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)

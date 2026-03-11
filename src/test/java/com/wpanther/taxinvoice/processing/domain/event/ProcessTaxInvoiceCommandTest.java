@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 

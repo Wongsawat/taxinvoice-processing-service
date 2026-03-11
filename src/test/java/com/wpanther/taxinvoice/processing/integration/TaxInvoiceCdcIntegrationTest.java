@@ -1,7 +1,7 @@
 package com.wpanther.taxinvoice.processing.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;

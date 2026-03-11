@@ -35,8 +35,8 @@ class TaxInvoiceProcessingServiceApplicationTest {
         // Then
         assertTrue(applicationContext.containsBean("taxInvoiceProcessingService"),
             "Should have TaxInvoiceProcessingService bean");
-        assertTrue(applicationContext.containsBean("eventPublisher"),
-            "Should have EventPublisher bean");
+        assertTrue(applicationContext.containsBean("taxInvoiceEventPublisher"),
+            "Should have TaxInvoiceEventPublisher bean");
         assertTrue(applicationContext.containsBean("sagaRouteConfig"),
             "Should have SagaRouteConfig bean");
         assertTrue(applicationContext.containsBean("sagaCommandHandler"),
