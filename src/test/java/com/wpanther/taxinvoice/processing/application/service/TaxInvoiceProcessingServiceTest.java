@@ -3,11 +3,11 @@ package com.wpanther.taxinvoice.processing.application.service;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.EventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,7 +41,7 @@ class TaxInvoiceProcessingServiceTest {
     private TaxInvoiceParserPort parserService;
 
     @Mock
-    private EventPublisher eventPublisher;
+    private TaxInvoiceEventPublishingPort eventPublisher;
 
     @Mock
     private SagaReplyPort sagaReplyPort;
@@ -100,7 +100,7 @@ class TaxInvoiceProcessingServiceTest {
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(parserService).parse("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher).publishTaxInvoiceProcessed(any(TaxInvoiceProcessedEvent.class));
+        verify(eventPublisher).publish(any(TaxInvoiceProcessedEvent.class));
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
     }
 
@@ -116,7 +116,7 @@ class TaxInvoiceProcessingServiceTest {
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(parserService, never()).parse(anyString(), anyString());
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+        verify(eventPublisher, never()).publish(any());
         // For idempotent case, saga reply is still published
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
     }
@@ -134,7 +134,7 @@ class TaxInvoiceProcessingServiceTest {
 
         verify(parserService).parse("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+        verify(eventPublisher, never()).publish(any());
         // Verify failure reply is published
         verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("correlation-123"), contains("Parse error"));
     }
@@ -152,7 +152,7 @@ class TaxInvoiceProcessingServiceTest {
         // Then
         ArgumentCaptor<TaxInvoiceProcessedEvent> eventCaptor =
             ArgumentCaptor.forClass(TaxInvoiceProcessedEvent.class);
-        verify(eventPublisher).publishTaxInvoiceProcessed(eventCaptor.capture());
+        verify(eventPublisher).publish(eventCaptor.capture());
 
         TaxInvoiceProcessedEvent processedEvent = eventCaptor.getValue();
         assertEquals("TXN-001", processedEvent.getInvoiceNumber());
@@ -186,7 +186,7 @@ class TaxInvoiceProcessingServiceTest {
         assertThrows(RuntimeException.class,
             () -> service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
 
-        verify(eventPublisher, never()).publishTaxInvoiceProcessed(any());
+        verify(eventPublisher, never()).publish(any());
     }
 
     @Test

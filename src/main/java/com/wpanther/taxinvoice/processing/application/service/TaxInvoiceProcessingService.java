@@ -4,13 +4,13 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.application.port.in.CompensateTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ import java.util.Optional;
 /**
  * Application service for tax invoice processing.
  * Implements inbound ports for processing and compensation.
- * Uses outbound ports via EventPublisher for event publishing and SagaReplyPort for saga replies.
+ * Uses outbound ports via TaxInvoiceEventPublishingPort for event publishing and SagaReplyPort for saga replies.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,7 +31,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
 
     private final ProcessedTaxInvoiceRepository invoiceRepository;
     private final TaxInvoiceParserPort parserService;
-    private final EventPublisher eventPublisher;
+    private final TaxInvoiceEventPublishingPort eventPublisher;
     private final SagaReplyPort sagaReplyPort;
 
     /**
@@ -84,7 +84,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             saved.getCurrency(),
             correlationId
         );
-        eventPublisher.publishTaxInvoiceProcessed(processedEvent);
+        eventPublisher.publish(processedEvent);
 
         // Publish saga success reply
         sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);

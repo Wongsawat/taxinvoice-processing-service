@@ -46,7 +46,7 @@ class EventPublisherTest {
         when(headerSerializer.toJson(any())).thenReturn("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"TXN-001\"}");
 
         // When
-        eventPublisher.publishTaxInvoiceProcessed(event);
+        eventPublisher.publish(event);
 
         // Then
         verify(outboxService).saveWithRouting(
@@ -73,7 +73,7 @@ class EventPublisherTest {
         when(headerSerializer.toJson(any())).thenReturn("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"TXN-001\"}");
 
         // When
-        eventPublisher.publishTaxInvoiceProcessed(event);
+        eventPublisher.publish(event);
 
         // Then
         ArgumentCaptor<String> headersCaptor = ArgumentCaptor.forClass(String.class);
@@ -105,7 +105,7 @@ class EventPublisherTest {
         when(headerSerializer.toJson(any())).thenReturn(null);
 
         // When
-        eventPublisher.publishTaxInvoiceProcessed(event);
+        eventPublisher.publish(event);
 
         // Then
         ArgumentCaptor<String> headersCaptor = ArgumentCaptor.forClass(String.class);
@@ -135,7 +135,7 @@ class EventPublisherTest {
         when(headerSerializer.toJson(any())).thenReturn("{}");
 
         // When
-        eventPublisher.publishTaxInvoiceProcessed(event);
+        eventPublisher.publish(event);
 
         // Then
         ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
@@ -157,7 +157,7 @@ class EventPublisherTest {
         when(headerSerializer.toJson(any())).thenReturn("{}");
 
         // When
-        eventPublisher.publishTaxInvoiceProcessed(event);
+        eventPublisher.publish(event);
 
         // Then
         ArgumentCaptor<String> partitionKeyCaptor = ArgumentCaptor.forClass(String.class);
