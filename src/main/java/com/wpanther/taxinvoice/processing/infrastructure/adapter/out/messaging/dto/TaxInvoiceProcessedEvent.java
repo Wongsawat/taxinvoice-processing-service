@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.processing.domain.event;
+package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;

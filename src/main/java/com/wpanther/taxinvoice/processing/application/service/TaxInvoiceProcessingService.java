@@ -4,7 +4,7 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.application.port.in.CompensateTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;

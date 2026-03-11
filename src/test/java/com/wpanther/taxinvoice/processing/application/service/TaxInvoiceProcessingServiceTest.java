@@ -3,7 +3,7 @@ package com.wpanther.taxinvoice.processing.application.service;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
-import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;

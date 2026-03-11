@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.processing.domain.event;
+package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
 import com.wpanther.saga.domain.enums.SagaStep;

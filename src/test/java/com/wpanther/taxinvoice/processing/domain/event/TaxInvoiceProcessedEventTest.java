@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

@@ -24,7 +24,8 @@ mvnw.cmd
 *.iws
 *.iml
 *.ipr
-out/
+/out/
+!/src/main/java/.../adapter/out/
 
 # IDE - Eclipse
 .apt_generated
