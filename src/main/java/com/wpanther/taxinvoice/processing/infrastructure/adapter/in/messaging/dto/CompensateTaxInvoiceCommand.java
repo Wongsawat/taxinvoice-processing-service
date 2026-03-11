@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.processing.domain.event;
+package com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -10,25 +10,25 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Command received from the Saga Orchestrator to process a tax invoice.
- * Consumed from Kafka topic: saga.command.tax-invoice
+ * Compensation command from the Saga Orchestrator to rollback tax invoice processing.
+ * Consumed from Kafka topic: saga.compensation.tax-invoice
  */
 @Getter
-public class ProcessTaxInvoiceCommand extends SagaCommand {
+public class CompensateTaxInvoiceCommand extends SagaCommand {
 
     private static final long serialVersionUID = 1L;
+
+    @JsonProperty("stepToCompensate")
+    private final String stepToCompensate;
 
     @JsonProperty("documentId")
     private final String documentId;
 
-    @JsonProperty("xmlContent")
-    private final String xmlContent;
-
-    @JsonProperty("invoiceNumber")
-    private final String invoiceNumber;
+    @JsonProperty("documentType")
+    private final String documentType;
 
     @JsonCreator
-    public ProcessTaxInvoiceCommand(
+    public CompensateTaxInvoiceCommand(
             @JsonProperty("eventId") UUID eventId,
             @JsonProperty("occurredAt") Instant occurredAt,
             @JsonProperty("eventType") String eventType,
@@ -36,23 +36,23 @@ public class ProcessTaxInvoiceCommand extends SagaCommand {
             @JsonProperty("sagaId") String sagaId,
             @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
+            @JsonProperty("stepToCompensate") String stepToCompensate,
             @JsonProperty("documentId") String documentId,
-            @JsonProperty("xmlContent") String xmlContent,
-            @JsonProperty("invoiceNumber") String invoiceNumber) {
+            @JsonProperty("documentType") String documentType) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
+        this.stepToCompensate = stepToCompensate;
         this.documentId = documentId;
-        this.xmlContent = xmlContent;
-        this.invoiceNumber = invoiceNumber;
+        this.documentType = documentType;
     }
 
     /**
      * Convenience constructor for testing.
      */
-    public ProcessTaxInvoiceCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                     String documentId, String xmlContent, String invoiceNumber) {
+    public CompensateTaxInvoiceCommand(String sagaId, SagaStep sagaStep, String correlationId,
+                                        String stepToCompensate, String documentId, String documentType) {
         super(sagaId, sagaStep, correlationId);
+        this.stepToCompensate = stepToCompensate;
         this.documentId = documentId;
-        this.xmlContent = xmlContent;
-        this.invoiceNumber = invoiceNumber;
+        this.documentType = documentType;
     }
 }

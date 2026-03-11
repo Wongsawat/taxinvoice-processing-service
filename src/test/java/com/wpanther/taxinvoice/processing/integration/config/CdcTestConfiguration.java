@@ -28,10 +28,10 @@ import javax.sql.DataSource;
     basePackages = {
         "com.wpanther.taxinvoice.processing.domain",
         "com.wpanther.taxinvoice.processing.application",
-        "com.wpanther.taxinvoice.processing.infrastructure.persistence",
-        "com.wpanther.taxinvoice.processing.infrastructure.config",
-        "com.wpanther.taxinvoice.processing.infrastructure.messaging",
-        "com.wpanther.taxinvoice.processing.infrastructure.service",
+        "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence",
+        "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging",
+        "com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging",
+        "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.parsing",
         "com.wpanther.saga.infrastructure"
     },
     excludeFilters = @ComponentScan.Filter(
@@ -40,10 +40,10 @@ import javax.sql.DataSource;
     )
 )
 @EnableJpaRepositories(basePackages = {
-    "com.wpanther.taxinvoice.processing.infrastructure.persistence"
+    "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence"
 })
 @EntityScan(basePackages = {
-    "com.wpanther.taxinvoice.processing.infrastructure.persistence"
+    "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence"
 })
 @EnableTransactionManagement
 @Import(TestKafkaConsumerConfig.class)

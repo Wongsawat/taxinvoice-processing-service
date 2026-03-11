@@ -1,11 +1,11 @@
-package com.wpanther.taxinvoice.processing.infrastructure.config;
+package com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.saga.domain.enums.SagaStep;
-import com.wpanther.taxinvoice.processing.application.service.SagaCommandHandler;
-import com.wpanther.taxinvoice.processing.domain.event.CompensateTaxInvoiceCommand;
-import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.SagaCommandHandler;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.CompensateTaxInvoiceCommand;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.Route;

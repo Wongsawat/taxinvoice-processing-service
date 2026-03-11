@@ -165,7 +165,7 @@ class ProcessedTaxInvoiceTest {
         invoice.startProcessing();
 
         // When
-        invoice.markCompleted();
+        invoice.markCompleted("test-correlation-id");
 
         // Then
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
@@ -178,7 +178,7 @@ class ProcessedTaxInvoiceTest {
         ProcessedTaxInvoice invoice = validInvoiceBuilder.build();
 
         // When/Then
-        assertThrows(IllegalStateException.class, invoice::markCompleted);
+        assertThrows(IllegalStateException.class, () -> invoice.markCompleted("test-correlation-id"));
     }
 
     @Test
@@ -397,7 +397,7 @@ class ProcessedTaxInvoiceTest {
         invoice.startProcessing();
         assertEquals(ProcessingStatus.PROCESSING, invoice.getStatus());
 
-        invoice.markCompleted();
+        invoice.markCompleted("test-correlation-id");
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
         assertNotNull(invoice.getCompletedAt());
     }

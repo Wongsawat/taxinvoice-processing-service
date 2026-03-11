@@ -1,8 +1,7 @@
-package com.wpanther.taxinvoice.processing.infrastructure.config;
+package com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging;
 
-import com.wpanther.taxinvoice.processing.application.service.SagaCommandHandler;
-import com.wpanther.taxinvoice.processing.domain.event.CompensateTaxInvoiceCommand;
-import com.wpanther.taxinvoice.processing.domain.event.ProcessTaxInvoiceCommand;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.CompensateTaxInvoiceCommand;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
