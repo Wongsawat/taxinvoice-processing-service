@@ -14,7 +14,6 @@ import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +29,6 @@ import java.util.concurrent.CompletionException;
  * Uses outbound ports via TaxInvoiceEventPublishingPort for event publishing and SagaReplyPort for saga replies.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, CompensateTaxInvoiceUseCase {
 
@@ -40,32 +38,39 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     private final SagaReplyPort sagaReplyPort;
     private final MeterRegistry meterRegistry;
 
-    private Counter getProcessSuccessCounter() {
-        return Counter.builder("taxinvoice.processing.success")
+    // Metrics - initialized once in constructor
+    private final Counter processSuccessCounter;
+    private final Counter processFailureCounter;
+    private final Counter compensateSuccessCounter;
+    private final Counter compensateFailureCounter;
+    private final Timer processingTimer;
+
+    public TaxInvoiceProcessingService(
+            ProcessedTaxInvoiceRepository invoiceRepository,
+            TaxInvoiceParserPort parserService,
+            TaxInvoiceEventPublishingPort eventPublisher,
+            SagaReplyPort sagaReplyPort,
+            MeterRegistry meterRegistry) {
+        this.invoiceRepository = invoiceRepository;
+        this.parserService = parserService;
+        this.eventPublisher = eventPublisher;
+        this.sagaReplyPort = sagaReplyPort;
+        this.meterRegistry = meterRegistry;
+
+        // Initialize metrics once
+        this.processSuccessCounter = Counter.builder("taxinvoice.processing.success")
             .description("Number of successfully processed tax invoices")
             .register(meterRegistry);
-    }
-
-    private Counter getProcessFailureCounter() {
-        return Counter.builder("taxinvoice.processing.failure")
+        this.processFailureCounter = Counter.builder("taxinvoice.processing.failure")
             .description("Number of failed tax invoice processing attempts")
             .register(meterRegistry);
-    }
-
-    private Counter getCompensateSuccessCounter() {
-        return Counter.builder("taxinvoice.compensation.success")
+        this.compensateSuccessCounter = Counter.builder("taxinvoice.compensation.success")
             .description("Number of successful compensations")
             .register(meterRegistry);
-    }
-
-    private Counter getCompensateFailureCounter() {
-        return Counter.builder("taxinvoice.compensation.failure")
+        this.compensateFailureCounter = Counter.builder("taxinvoice.compensation.failure")
             .description("Number of failed compensation attempts")
             .register(meterRegistry);
-    }
-
-    private Timer getProcessingTimer() {
-        return Timer.builder("taxinvoice.processing.duration")
+        this.processingTimer = Timer.builder("taxinvoice.processing.duration")
             .description("Time taken to process tax invoices")
             .register(meterRegistry);
     }
@@ -79,15 +84,15 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     public void process(String documentId, String xmlContent,
                          String sagaId, SagaStep sagaStep, String correlationId) throws TaxInvoiceProcessingException {
         try {
-            getProcessingTimer().record(() -> {
+            processingTimer.record(() -> {
                 try {
                     processInvoiceForSagaInternal(documentId, xmlContent, sagaId, sagaStep, correlationId);
-                    getProcessSuccessCounter().increment();
+                    processSuccessCounter.increment();
                 } catch (TaxInvoiceParserPort.TaxInvoiceParsingException e) {
-                    getProcessFailureCounter().increment();
+                    processFailureCounter.increment();
                     throw new CompletionException(e);
                 } catch (RuntimeException e) {
-                    getProcessFailureCounter().increment();
+                    processFailureCounter.increment();
                     throw new CompletionException(e);  // Wrap to ensure outer catch handles it
                 }
             });
@@ -132,7 +137,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         log.info("Saved processed tax invoice: {}", saved.getInvoiceNumber());
 
         // State: PROCESSING → COMPLETED
-        saved.markCompleted(correlationId);
+        saved.markCompleted();
         invoiceRepository.save(saved);
 
         // Publish notification event (kept for notification-service)
@@ -170,9 +175,9 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             }
 
             sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
-            getCompensateSuccessCounter().increment();
+            compensateSuccessCounter.increment();
         } catch (Exception e) {
-            getCompensateFailureCounter().increment();
+            compensateFailureCounter.increment();
             log.error("Failed to compensate tax invoice for saga {}: {}", sagaId, e.getMessage(), e);
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Compensation failed: " + e.getMessage());
         }

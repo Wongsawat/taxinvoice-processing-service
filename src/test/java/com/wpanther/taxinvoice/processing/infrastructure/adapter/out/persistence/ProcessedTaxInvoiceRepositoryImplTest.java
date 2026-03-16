@@ -248,7 +248,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
         saved.startProcessing();
         repository.save(saved);
 
-        saved.markCompleted("test-correlation-id");
+        saved.markCompleted();
         ProcessedTaxInvoice finalInvoice = repository.save(saved);
 
         // Then

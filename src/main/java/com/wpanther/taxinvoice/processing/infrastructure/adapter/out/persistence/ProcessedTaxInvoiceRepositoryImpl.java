@@ -73,7 +73,7 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     @Override
     @Transactional(readOnly = true)
     public Optional<ProcessedTaxInvoice> findBySourceInvoiceId(String sourceInvoiceId) {
-        return jpaRepository.findBySourceInvoiceId(sourceInvoiceId)
+        return jpaRepository.findBySourceInvoiceIdWithDetails(sourceInvoiceId)
             .map(mapper::toDomain);
     }
 
