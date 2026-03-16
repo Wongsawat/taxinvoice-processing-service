@@ -191,9 +191,11 @@ class TaxInvoiceProcessingServiceTest {
             .thenThrow(new RuntimeException("Database error"));
 
         // When / Then
-        assertThrows(RuntimeException.class,
+        assertThrows(ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException.class,
             () -> service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
 
+        // Verify failure reply is published to avoid hanging the saga
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("correlation-123"), contains("Processing error"));
         verify(eventPublisher, never()).publish(any());
     }
 

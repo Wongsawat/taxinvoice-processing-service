@@ -88,14 +88,24 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                     throw new CompletionException(e);
                 } catch (RuntimeException e) {
                     getProcessFailureCounter().increment();
-                    throw e;
+                    throw new CompletionException(e);  // Wrap to ensure outer catch handles it
                 }
             });
         } catch (CompletionException e) {
-            TaxInvoiceParserPort.TaxInvoiceParsingException cause =
-                (TaxInvoiceParserPort.TaxInvoiceParsingException) e.getCause();
-            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + cause.getMessage());
-            throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + cause.getMessage(), cause);
+            Throwable cause = e.getCause();
+            if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException parseException) {
+                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + parseException.getMessage());
+                throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + parseException.getMessage(), parseException);
+            } else if (cause instanceof RuntimeException runtimeException) {
+                // For unexpected runtime errors (DB failures, etc.), publish failure reply to avoid hanging the saga
+                // Use publishFailure with REQUIRES_NEW to ensure the reply is sent even if the transaction rolls back
+                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Processing error: " + runtimeException.getMessage());
+                throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + runtimeException.getMessage(), runtimeException);
+            } else {
+                // Unknown error type - publish failure and wrap
+                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Unexpected error: " + (cause != null ? cause.getMessage() : "unknown cause"));
+                throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + (cause != null ? cause.getMessage() : "unknown cause"), e);
+            }
         }
     }
 
