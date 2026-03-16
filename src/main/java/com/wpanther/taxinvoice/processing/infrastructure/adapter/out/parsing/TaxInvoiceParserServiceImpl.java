@@ -320,14 +320,8 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         List<LineItem> items = new ArrayList<>();
 
         for (int i = 0; i < jaxbItems.size(); i++) {
-            try {
-                LineItem item = mapLineItem(jaxbItems.get(i), currency);
-                items.add(item);
-            } catch (Exception e) {
-                throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                    "Failed to parse line item " + (i + 1) + ": " + e.getMessage(), e
-                );
-            }
+            LineItem item = mapLineItem(jaxbItems.get(i), currency);
+            items.add(item);
         }
 
         return items;

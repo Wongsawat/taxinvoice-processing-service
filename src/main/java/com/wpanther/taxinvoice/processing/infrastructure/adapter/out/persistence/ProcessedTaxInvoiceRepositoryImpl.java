@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of ProcessedTaxInvoiceRepository using Spring Data JPA
@@ -67,7 +66,7 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
         List<ProcessedTaxInvoiceEntity> entities = jpaRepository.findByStatusWithDetails(status);
         return entities.stream()
             .map(mapper::toDomain)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
