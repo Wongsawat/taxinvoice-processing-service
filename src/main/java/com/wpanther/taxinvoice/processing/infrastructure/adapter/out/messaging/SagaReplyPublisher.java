@@ -4,8 +4,8 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceReplyEvent;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,18 +14,26 @@ import java.util.Map;
 
 /**
  * Saga reply publisher - driven adapter that publishes saga replies via outbox pattern.
- * Replies are sent to the orchestrator via saga.reply.tax-invoice topic.
+ * Replies are sent to the orchestrator via configurable saga.reply.tax-invoice topic.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class SagaReplyPublisher implements SagaReplyPort {
 
-    private static final String REPLY_TOPIC = "saga.reply.tax-invoice";
     private static final String AGGREGATE_TYPE = "ProcessedTaxInvoice";
 
     private final OutboxService outboxService;
     private final HeaderSerializer headerSerializer;
+    private final String replyTopic;
+
+    public SagaReplyPublisher(
+            OutboxService outboxService,
+            HeaderSerializer headerSerializer,
+            @Value("${app.kafka.topics.saga-reply-tax-invoice}") String replyTopic) {
+        this.outboxService = outboxService;
+        this.headerSerializer = headerSerializer;
+        this.replyTopic = replyTopic;
+    }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishSuccess(String sagaId, SagaStep sagaStep, String correlationId) {
@@ -41,7 +49,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
             reply,
             AGGREGATE_TYPE,
             sagaId,
-            REPLY_TOPIC,
+            replyTopic,
             sagaId,
             headerSerializer.toJson(headers)
         );
@@ -63,7 +71,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
             reply,
             AGGREGATE_TYPE,
             sagaId,
-            REPLY_TOPIC,
+            replyTopic,
             sagaId,
             headerSerializer.toJson(headers)
         );
@@ -85,7 +93,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
             reply,
             AGGREGATE_TYPE,
             sagaId,
-            REPLY_TOPIC,
+            replyTopic,
             sagaId,
             headerSerializer.toJson(headers)
         );

@@ -50,35 +50,21 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     @Override
     @Transactional(readOnly = true)
     public Optional<ProcessedTaxInvoice> findById(TaxInvoiceId id) {
-        log.debug("Finding tax invoice by ID: {}", id);
-
         return jpaRepository.findByIdWithDetails(id.value())
-            .map(entity -> {
-                log.debug("Found tax invoice: {}", entity.getInvoiceNumber());
-                return mapper.toDomain(entity);
-            });
+            .map(mapper::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<ProcessedTaxInvoice> findByInvoiceNumber(String invoiceNumber) {
-        log.debug("Finding tax invoice by number: {}", invoiceNumber);
-
         return jpaRepository.findByInvoiceNumber(invoiceNumber)
-            .map(entity -> {
-                log.debug("Found tax invoice with ID: {}", entity.getId());
-                return mapper.toDomain(entity);
-            });
+            .map(mapper::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProcessedTaxInvoice> findByStatus(ProcessingStatus status) {
-        log.debug("Finding tax invoices by status: {}", status);
-
         List<ProcessedTaxInvoiceEntity> entities = jpaRepository.findByStatusWithDetails(status);
-        log.debug("Found {} tax invoices with status: {}", entities.size(), status);
-
         return entities.stream()
             .map(mapper::toDomain)
             .collect(Collectors.toList());
@@ -87,21 +73,14 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     @Override
     @Transactional(readOnly = true)
     public Optional<ProcessedTaxInvoice> findBySourceInvoiceId(String sourceInvoiceId) {
-        log.debug("Finding tax invoice by source ID: {}", sourceInvoiceId);
-
         return jpaRepository.findBySourceInvoiceId(sourceInvoiceId)
-            .map(entity -> {
-                log.debug("Found tax invoice: {}", entity.getInvoiceNumber());
-                return mapper.toDomain(entity);
-            });
+            .map(mapper::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean existsByInvoiceNumber(String invoiceNumber) {
-        boolean exists = jpaRepository.existsByInvoiceNumber(invoiceNumber);
-        log.debug("Tax invoice number {} exists: {}", invoiceNumber, exists);
-        return exists;
+        return jpaRepository.existsByInvoiceNumber(invoiceNumber);
     }
 
     @Override

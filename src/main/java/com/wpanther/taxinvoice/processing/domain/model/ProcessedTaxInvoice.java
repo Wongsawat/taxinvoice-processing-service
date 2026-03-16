@@ -43,10 +43,10 @@ public class ProcessedTaxInvoice {
     private LocalDateTime completedAt;
     private String errorMessage;
 
-    // Cached totals (calculated on demand)
-    private transient volatile Money cachedSubtotal;
-    private transient volatile Money cachedTotalTax;
-    private transient volatile Money cachedTotal;
+    // Eagerly computed totals
+    private final Money subtotal;
+    private final Money totalTax;
+    private final Money total;
 
     private ProcessedTaxInvoice(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "Tax Invoice ID is required");
@@ -64,8 +64,31 @@ public class ProcessedTaxInvoice {
         this.completedAt = builder.completedAt;
         this.errorMessage = builder.errorMessage;
 
+        // Eagerly compute totals
+        this.subtotal = calculateSubtotal(builder.items, builder.currency);
+        this.totalTax = calculateTotalTax(builder.items, builder.currency);
+        this.total = subtotal.add(totalTax);
+
         // Validate business rules
         validateInvariant();
+    }
+
+    /**
+     * Calculate invoice subtotal (sum of all line totals before tax)
+     */
+    private static Money calculateSubtotal(List<LineItem> items, String currency) {
+        return items.stream()
+            .map(LineItem::getLineTotal)
+            .reduce(Money.zero(currency), Money::add);
+    }
+
+    /**
+     * Calculate total tax amount
+     */
+    private static Money calculateTotalTax(List<LineItem> items, String currency) {
+        return items.stream()
+            .map(LineItem::getTaxAmount)
+            .reduce(Money.zero(currency), Money::add);
     }
 
     /**
@@ -99,34 +122,21 @@ public class ProcessedTaxInvoice {
      * Calculate invoice subtotal (sum of all line totals before tax)
      */
     public Money getSubtotal() {
-        if (cachedSubtotal == null) {
-            cachedSubtotal = items.stream()
-                .map(LineItem::getLineTotal)
-                .reduce(Money.zero(currency), Money::add);
-        }
-        return cachedSubtotal;
+        return subtotal;
     }
 
     /**
      * Calculate total tax amount
      */
     public Money getTotalTax() {
-        if (cachedTotalTax == null) {
-            cachedTotalTax = items.stream()
-                .map(LineItem::getTaxAmount)
-                .reduce(Money.zero(currency), Money::add);
-        }
-        return cachedTotalTax;
+        return totalTax;
     }
 
     /**
      * Calculate grand total (subtotal + tax)
      */
     public Money getTotal() {
-        if (cachedTotal == null) {
-            cachedTotal = getSubtotal().add(getTotalTax());
-        }
-        return cachedTotal;
+        return total;
     }
 
     /**

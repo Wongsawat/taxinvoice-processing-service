@@ -8,6 +8,8 @@ import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.d
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,13 +48,19 @@ class TaxInvoiceProcessingServiceTest {
     @Mock
     private SagaReplyPort sagaReplyPort;
 
-    @InjectMocks
     private TaxInvoiceProcessingService service;
 
     private ProcessedTaxInvoice validInvoice;
 
     @BeforeEach
     void setUp() {
+        service = new TaxInvoiceProcessingService(
+            invoiceRepository,
+            parserService,
+            eventPublisher,
+            sagaReplyPort,
+            new SimpleMeterRegistry()
+        );
         Party seller = Party.of(
             "Seller Company",
             TaxIdentifier.of("1234567890", "VAT"),

@@ -286,12 +286,13 @@ class ProcessedTaxInvoiceTest {
 
     @Test
     void testInvalidCurrencyLength() {
-        // When/Then
-        assertThrows(IllegalStateException.class, () ->
+        // When/Then - Money.zero() throws IllegalArgumentException for invalid currency
+        // before ProcessedTaxInvoice validation runs
+        assertThrows(IllegalArgumentException.class, () ->
             validInvoiceBuilder.currency("US").build()
         );
 
-        assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalArgumentException.class, () ->
             validInvoiceBuilder.currency("USDT").build()
         );
     }
@@ -317,8 +318,9 @@ class ProcessedTaxInvoiceTest {
             new BigDecimal("7.00")
         );
 
-        // When/Then
-        assertThrows(IllegalStateException.class, () ->
+        // When/Then - Money.zero(THB) + Money(USD) throws IllegalArgumentException
+        // because currencies don't match when reducing in calculateTotalTax
+        assertThrows(IllegalArgumentException.class, () ->
             validInvoiceBuilder
                 .items(List.of(itemWithDifferentCurrency))
                 .build()

@@ -27,7 +27,7 @@ class SagaReplyPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new SagaReplyPublisher(outboxService, headerSerializer);
+        publisher = new SagaReplyPublisher(outboxService, headerSerializer, "saga.reply.tax-invoice");
     }
 
     @Test
