@@ -57,7 +57,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
         log.info("Published SUCCESS saga reply for saga {} step {}", sagaId, sagaStep);
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.failure(sagaId, sagaStep, correlationId, errorMessage);
 
@@ -79,7 +79,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
         log.info("Published FAILURE saga reply for saga {} step {}: {}", sagaId, sagaStep, errorMessage);
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.compensated(sagaId, sagaStep, correlationId);
 

@@ -102,25 +102,22 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             Throwable cause = e.getCause();
             if (cause instanceof DataIntegrityViolationException divException) {
                 // Race condition: another thread already inserted this document.
-                // The outer transaction is ROLLBACK_ONLY at this point, so the
-                // publishFailure() outbox write below will also be rolled back and lost.
-                // SagaCommandHandler swallows TaxInvoiceProcessingException, so Camel
-                // will NOT retry. The saga will time out. This is acceptable given
-                // partition affinity makes this case near-impossible in production.
+                // The outer transaction is ROLLBACK_ONLY, but publishFailure() uses
+                // REQUIRES_NEW propagation so its outbox write commits independently
+                // and the failure reply IS delivered to the orchestrator.
                 log.warn("Race condition (duplicate key) detected for document {}, saga {}. " +
-                         "publishFailure() is attempted but will be lost (ROLLBACK_ONLY transaction); " +
-                         "saga will time out.", documentId, sagaId);
+                         "Publishing failure reply in independent transaction.", documentId, sagaId);
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                    "Duplicate document: " + divException.getMessage()); // best-effort; write will be rolled back
+                    "Duplicate document: " + divException.getMessage());
                 throw new TaxInvoiceProcessingException(
                     "Duplicate key for document: " + documentId, divException);
             } else if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException parseException) {
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + parseException.getMessage());
                 throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + parseException.getMessage(), parseException);
             } else if (cause instanceof RuntimeException runtimeException) {
-                // For unexpected runtime errors (DB failures, etc.), publish failure reply to avoid hanging the saga
-                // publishFailure uses MANDATORY propagation - the reply is part of the same transaction
-                // that will be rolled back due to the exception
+                // For unexpected runtime errors (DB failures, etc.), publish failure reply to avoid hanging the saga.
+                // publishFailure uses REQUIRES_NEW propagation - it commits in its own independent transaction
+                // and succeeds even if the outer transaction is ROLLBACK_ONLY or its Hibernate session is invalid.
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Processing error: " + runtimeException.getMessage());
                 throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + runtimeException.getMessage(), runtimeException);
             } else {
