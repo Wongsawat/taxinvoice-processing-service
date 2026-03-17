@@ -13,7 +13,6 @@ public interface ProcessTaxInvoiceUseCase {
      * Process a tax invoice as part of a saga command.
      * Parses XML, validates, calculates totals, saves to DB, publishes notification event.
      * Handles idempotency, parses XML, persists, raises domain events, publishes saga reply.
-     * Race conditions (DataIntegrityViolationException) are treated as idempotent success.
      *
      * @param documentId    Source document ID (used for idempotency)
      * @param xmlContent    Raw XML string to parse
