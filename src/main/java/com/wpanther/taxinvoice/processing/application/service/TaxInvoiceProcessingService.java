@@ -48,6 +48,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     // Metrics - initialized once in constructor
     private final Counter processSuccessCounter;
     private final Counter processFailureCounter;
+    private final Counter processIdempotentCounter;
     private final Counter compensateSuccessCounter;
     private final Counter compensateFailureCounter;
     private final Timer processingTimer;
@@ -75,6 +76,9 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             .register(meterRegistry);
         this.processFailureCounter = Counter.builder("taxinvoice.processing.failure")
             .description("Number of failed tax invoice processing attempts")
+            .register(meterRegistry);
+        this.processIdempotentCounter = Counter.builder("taxinvoice.processing.idempotent")
+            .description("Number of duplicate processing requests handled idempotently")
             .register(meterRegistry);
         this.compensateSuccessCounter = Counter.builder("taxinvoice.compensation.success")
             .description("Number of successful compensations")
@@ -140,8 +144,10 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             // publishFailure uses REQUIRES_NEW propagation — commits in its own independent
             // transaction even if the outer transaction is ROLLBACK_ONLY or the Hibernate
             // session is invalid.
-            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Processing error: " + e.getMessage());
-            throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + e.getMessage(), e);
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                    "Processing error for document " + documentId + ": " + e.getMessage());
+            throw new TaxInvoiceProcessingException(
+                    "Failed to process tax invoice " + documentId + ": " + e.getMessage(), e);
         } finally {
             sample.stop(processingTimer);
         }
@@ -156,6 +162,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
         if (existing.isPresent()) {
             log.warn("Tax invoice already processed for document {}, returning existing", documentId);
+            processIdempotentCounter.increment();
             // Still publish success for idempotent case
             sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
             return existing.get();

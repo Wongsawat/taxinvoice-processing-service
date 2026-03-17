@@ -4,7 +4,17 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Value Object representing a business party (seller or buyer)
+ * Value Object representing a business party (seller or buyer) in a tax invoice.
+ *
+ * <p>Field nullability:
+ * <ul>
+ *   <li>{@code name} — required; enforced by the compact constructor.</li>
+ *   <li>{@code taxIdentifier} — required by Thai e-Tax specification; the XML parser
+ *       always provides a non-null value. May be {@code null} only when a party is
+ *       reconstructed from a legacy database row that predates the not-null constraint.</li>
+ *   <li>{@code address} — same semantics as {@code taxIdentifier}.</li>
+ *   <li>{@code email} — genuinely optional; use {@link #hasEmail()} before accessing.</li>
+ * </ul>
  */
 public record Party(
     String name,
