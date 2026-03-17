@@ -30,15 +30,20 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
         log.debug("Saving processed tax invoice: {}", invoice.getInvoiceNumber());
 
         UUID id = invoice.getId().value();
-        if (jpaRepository.existsById(id)) {
-            // Update only mutable fields — parties and line items never change after creation
-            ProcessedTaxInvoiceEntity existing = jpaRepository.getReferenceById(id);
-            existing.setStatus(invoice.getStatus());
-            existing.setErrorMessage(invoice.getErrorMessage());
-            existing.setCompletedAt(invoice.getCompletedAt());
-            jpaRepository.save(existing);
+
+        // Use findById to check existence and get entity in one query
+        // This is more efficient than existsById + getReferenceById (2 queries)
+        Optional<ProcessedTaxInvoiceEntity> existing = jpaRepository.findById(id);
+
+        if (existing.isPresent()) {
+            // Entity exists - update only mutable fields (parties/lineItems never change)
+            ProcessedTaxInvoiceEntity entity = existing.get();
+            entity.setStatus(invoice.getStatus());
+            entity.setErrorMessage(invoice.getErrorMessage());
+            entity.setCompletedAt(invoice.getCompletedAt());
+            jpaRepository.save(entity);
         } else {
-            // New entity — full mapping
+            // New entity - full mapping
             jpaRepository.save(mapper.toEntity(invoice));
         }
 
@@ -56,7 +61,7 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     @Override
     @Transactional(readOnly = true)
     public Optional<ProcessedTaxInvoice> findByInvoiceNumber(String invoiceNumber) {
-        return jpaRepository.findByInvoiceNumber(invoiceNumber)
+        return jpaRepository.findByInvoiceNumberWithDetails(invoiceNumber)
             .map(mapper::toDomain);
     }
 

@@ -5,6 +5,7 @@ import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.d
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,9 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
     private final OutboxService outboxService;
     private final HeaderSerializer headerSerializer;
 
+    @Value("${app.kafka.topics.taxinvoice-processed}")
+    private String taxinvoiceProcessedTopic;
+
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(TaxInvoiceProcessedEvent event) {
@@ -35,7 +39,7 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
             event,
             "ProcessedTaxInvoice",
             event.getInvoiceId(),
-            "taxinvoice.processed",
+            taxinvoiceProcessedTopic,
             event.getInvoiceId(),
             headerSerializer.toJson(headers)
         );

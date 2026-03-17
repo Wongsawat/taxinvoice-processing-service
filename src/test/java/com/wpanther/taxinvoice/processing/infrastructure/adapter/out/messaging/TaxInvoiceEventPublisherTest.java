@@ -28,8 +28,12 @@ class TaxInvoiceEventPublisherTest {
     private TaxInvoiceEventPublisher eventPublisher;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         eventPublisher = new TaxInvoiceEventPublisher(outboxService, headerSerializer);
+        // Set the injected topic value via reflection (simulates @Value injection)
+        var topicField = TaxInvoiceEventPublisher.class.getDeclaredField("taxinvoiceProcessedTopic");
+        topicField.setAccessible(true);
+        topicField.set(eventPublisher, "taxinvoice.processed");
     }
 
     @Test

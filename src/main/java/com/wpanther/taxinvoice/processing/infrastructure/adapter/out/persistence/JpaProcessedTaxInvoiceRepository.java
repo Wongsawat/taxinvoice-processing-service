@@ -22,6 +22,15 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
     Optional<ProcessedTaxInvoiceEntity> findByInvoiceNumber(String invoiceNumber);
 
     /**
+     * Find by invoice number with parties and line items eagerly loaded (avoids N+1 queries and LazyInitializationException)
+     */
+    @Query("SELECT i FROM ProcessedTaxInvoiceEntity i " +
+           "LEFT JOIN FETCH i.parties " +
+           "LEFT JOIN FETCH i.lineItems " +
+           "WHERE i.invoiceNumber = :invoiceNumber")
+    Optional<ProcessedTaxInvoiceEntity> findByInvoiceNumberWithDetails(@Param("invoiceNumber") String invoiceNumber);
+
+    /**
      * Find by source invoice ID
      */
     Optional<ProcessedTaxInvoiceEntity> findBySourceInvoiceId(String sourceInvoiceId);

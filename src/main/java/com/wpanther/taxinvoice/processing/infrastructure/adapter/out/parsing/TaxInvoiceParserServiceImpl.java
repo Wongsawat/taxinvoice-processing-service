@@ -8,7 +8,22 @@ import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
 import com.wpanther.taxinvoice.processing.domain.model.TaxIdentifier;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
-import com.wpanther.etax.generated.taxinvoice.ram.*;
+import com.wpanther.etax.generated.taxinvoice.ram.ExchangedDocumentType;
+import com.wpanther.etax.generated.taxinvoice.ram.HeaderTradeAgreementType;
+import com.wpanther.etax.generated.taxinvoice.ram.HeaderTradeSettlementType;
+import com.wpanther.etax.generated.taxinvoice.ram.LineTradeAgreementType;
+import com.wpanther.etax.generated.taxinvoice.ram.LineTradeDeliveryType;
+import com.wpanther.etax.generated.taxinvoice.ram.LineTradeSettlementType;
+import com.wpanther.etax.generated.taxinvoice.ram.SupplyChainTradeLineItemType;
+import com.wpanther.etax.generated.taxinvoice.ram.SupplyChainTradeTransactionType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradeAddressType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradeContactType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradePartyType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradePaymentTermsType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradePriceType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradeProductType;
+import com.wpanther.etax.generated.taxinvoice.ram.TradeTaxType;
+import com.wpanther.etax.generated.taxinvoice.ram.TaxRegistrationType;
 import com.wpanther.etax.generated.taxinvoice.rsm.TaxInvoice_CrossIndustryInvoiceType;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
@@ -114,9 +129,11 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
         try {
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            StringReader reader = new StringReader(xmlContent);
 
-            Object result = unmarshaller.unmarshal(reader);
+            Object result;
+            try (StringReader reader = new StringReader(xmlContent)) {
+                result = unmarshaller.unmarshal(reader);
+            }
 
             // Handle JAXBElement wrapper (common when no @XmlRootElement annotation)
             if (result instanceof jakarta.xml.bind.JAXBElement) {
@@ -350,7 +367,13 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
                 "Line item quantity must be a whole number, got: " + quantityDecimal);
         }
-        int quantity = quantityDecimal.intValueExact();
+        int quantity;
+        try {
+            quantity = quantityDecimal.intValueExact();
+        } catch (ArithmeticException e) {
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "Line item quantity out of integer range: " + quantityDecimal, e);
+        }
 
         // Extract unit price
         LineTradeAgreementType agreement = jaxbItem.getSpecifiedLineTradeAgreement();

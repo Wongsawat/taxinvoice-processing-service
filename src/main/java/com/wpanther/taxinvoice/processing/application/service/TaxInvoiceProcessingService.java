@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletionException;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 /**
  * Application service for tax invoice processing.
  * Implements inbound ports for processing and compensation.
@@ -132,7 +134,14 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
 
         // State: PENDING → PROCESSING
         invoice.startProcessing();
-        ProcessedTaxInvoice saved = invoiceRepository.save(invoice);
+
+        // Save with race condition handling for idempotency
+        ProcessedTaxInvoice saved = saveWithIdempotencyHandling(invoice, documentId, sagaId, sagaStep, correlationId);
+        if (saved == null) {
+            // Race condition was handled - another thread already saved this invoice
+            return invoiceRepository.findBySourceInvoiceId(documentId).orElseThrow();
+        }
+
         log.info("Saved processed tax invoice: {}", saved.getInvoiceNumber());
 
         // State: PROCESSING → COMPLETED
@@ -154,6 +163,25 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
 
         log.info("Successfully processed tax invoice: {}", saved.getInvoiceNumber());
         return saved;
+    }
+
+    /**
+     * Save invoice with race condition handling for idempotency.
+     * If another thread already saved this invoice (DataIntegrityViolationException),
+     * returns null and the caller will fetch the existing invoice.
+     */
+    private ProcessedTaxInvoice saveWithIdempotencyHandling(ProcessedTaxInvoice invoice,
+            String documentId, String sagaId, SagaStep sagaStep, String correlationId) {
+        try {
+            return invoiceRepository.save(invoice);
+        } catch (DataIntegrityViolationException e) {
+            // Race condition: another thread already saved this invoice (same sourceInvoiceId)
+            // This is an idempotent success - fetch and return the existing invoice
+            log.warn("Race condition detected for document {}, fetching existing invoice", documentId);
+            // Still publish success for idempotent case
+            sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+            return null;
+        }
     }
 
     /**
