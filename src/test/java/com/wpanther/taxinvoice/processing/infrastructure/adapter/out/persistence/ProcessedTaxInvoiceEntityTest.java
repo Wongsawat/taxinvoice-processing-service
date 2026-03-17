@@ -164,9 +164,9 @@ class ProcessedTaxInvoiceEntityTest {
             now,
             null,
             now,
+            0L,  // version
             new HashSet<>(),
-            new ArrayList<>(),
-            0L  // version
+            new ArrayList<>()
         );
 
         // Then

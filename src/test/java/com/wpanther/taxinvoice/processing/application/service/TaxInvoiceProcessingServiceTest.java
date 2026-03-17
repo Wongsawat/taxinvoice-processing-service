@@ -61,9 +61,6 @@ class TaxInvoiceProcessingServiceTest {
 
     @BeforeEach
     void setUp() {
-        // transactionManager mock: getTransaction() returns null by default; TransactionTemplate
-        // still executes the callback, which is all we need for unit-testing the re-check logic.
-        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         service = new TaxInvoiceProcessingService(
             invoiceRepository,
             parserService,
@@ -375,6 +372,7 @@ class TaxInvoiceProcessingServiceTest {
     @Test
     void testProcessInvoiceForSagaDataIntegrityViolationPropagates() throws Exception {
         // Given - simulate race condition: idempotency check passes but insert conflicts
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
@@ -400,6 +398,7 @@ class TaxInvoiceProcessingServiceTest {
     void testProcessInvoiceForSagaRaceConditionResolvesAsSuccess() throws Exception {
         // Given - race condition: idempotency check passes, insert conflicts, but on
         // re-check the concurrent thread's record is already in the database.
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString()))
             .thenReturn(Optional.empty())          // 1st call: idempotency check — no record yet
             .thenReturn(Optional.of(validInvoice)); // 2nd call: re-check — concurrent insert committed
