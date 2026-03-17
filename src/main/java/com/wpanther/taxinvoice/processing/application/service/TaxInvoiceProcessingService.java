@@ -104,7 +104,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                 throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + parseException.getMessage(), parseException);
             } else if (cause instanceof RuntimeException runtimeException) {
                 // For unexpected runtime errors (DB failures, etc.), publish failure reply to avoid hanging the saga
-                // Use publishFailure with REQUIRES_NEW to ensure the reply is sent even if the transaction rolls back
+                // publishFailure uses MANDATORY propagation - the reply is part of the same transaction
+                // that will be rolled back due to the exception
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Processing error: " + runtimeException.getMessage());
                 throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + runtimeException.getMessage(), runtimeException);
             } else {
