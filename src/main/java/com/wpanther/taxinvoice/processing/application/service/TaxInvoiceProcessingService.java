@@ -220,7 +220,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     }
 
     @Transactional(readOnly = true)
-    public Optional<ProcessedTaxInvoice> findById(String id) {
+    Optional<ProcessedTaxInvoice> findById(String id) {
         try {
             return invoiceRepository.findById(TaxInvoiceId.from(id));
         } catch (IllegalArgumentException e) {
@@ -230,7 +230,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     }
 
     @Transactional(readOnly = true)
-    public List<ProcessedTaxInvoice> findByStatus(ProcessingStatus status) {
+    List<ProcessedTaxInvoice> findByStatus(ProcessingStatus status) {
         return invoiceRepository.findByStatus(status);
     }
 }

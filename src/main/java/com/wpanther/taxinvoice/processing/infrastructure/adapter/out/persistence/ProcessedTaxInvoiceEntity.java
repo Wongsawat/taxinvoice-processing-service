@@ -26,7 +26,6 @@ import java.util.UUID;
     @Index(name = "idx_tax_issue_date", columnList = "issue_date")
 })
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -63,10 +62,13 @@ public class ProcessedTaxInvoiceEntity {
     @Column(name = "original_xml", nullable = false, columnDefinition = "TEXT")
     private String originalXml;
 
+    // Mutable fields — only these three change after initial insert (PENDING→PROCESSING→COMPLETED)
+    @Setter
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ProcessingStatus status;
 
+    @Setter
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
@@ -74,12 +76,19 @@ public class ProcessedTaxInvoiceEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Setter
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    // Optimistic locking — guards against concurrent updates from non-saga paths
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Long version = 0L;
 
     // Relationships
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

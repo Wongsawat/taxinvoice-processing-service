@@ -76,36 +76,30 @@ class ProcessedTaxInvoiceEntityTest {
     }
 
     @Test
-    void testSetters() {
-        // Given
-        ProcessedTaxInvoiceEntity entity = new ProcessedTaxInvoiceEntity();
-        UUID id = UUID.randomUUID();
-        String sourceId = "source-123";
+    void testMutableFieldSetters() {
+        // Only status, completedAt, and errorMessage have setters — all other fields
+        // are set once via the builder and must not change after creation.
+        ProcessedTaxInvoiceEntity entity = ProcessedTaxInvoiceEntity.builder()
+            .id(UUID.randomUUID())
+            .sourceInvoiceId("source-123")
+            .invoiceNumber("TAX-INV-001")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .currency("THB")
+            .subtotal(new BigDecimal("1000.00"))
+            .totalTax(new BigDecimal("70.00"))
+            .total(new BigDecimal("1070.00"))
+            .originalXml("<xml>test</xml>")
+            .status(ProcessingStatus.PENDING)
+            .build();
 
-        // When
-        entity.setId(id);
-        entity.setSourceInvoiceId(sourceId);
-        entity.setInvoiceNumber("TAX-INV-001");
-        entity.setIssueDate(LocalDate.of(2025, 1, 1));
-        entity.setDueDate(LocalDate.of(2025, 2, 1));
-        entity.setCurrency("THB");
-        entity.setSubtotal(new BigDecimal("1000.00"));
-        entity.setTotalTax(new BigDecimal("70.00"));
-        entity.setTotal(new BigDecimal("1070.00"));
-        entity.setOriginalXml("<xml>test</xml>");
+        LocalDateTime completedAt = LocalDateTime.now();
         entity.setStatus(ProcessingStatus.COMPLETED);
+        entity.setCompletedAt(completedAt);
         entity.setErrorMessage("Error");
-        entity.setParties(new HashSet<>());
-        entity.setLineItems(new ArrayList<>());
 
-        // Then
-        assertEquals(id, entity.getId());
-        assertEquals(sourceId, entity.getSourceInvoiceId());
-        assertEquals("TAX-INV-001", entity.getInvoiceNumber());
-        assertNotNull(entity.getIssueDate());
-        assertNotNull(entity.getDueDate());
-        assertEquals("THB", entity.getCurrency());
         assertEquals(ProcessingStatus.COMPLETED, entity.getStatus());
+        assertEquals(completedAt, entity.getCompletedAt());
         assertEquals("Error", entity.getErrorMessage());
     }
 
@@ -171,7 +165,8 @@ class ProcessedTaxInvoiceEntityTest {
             null,
             now,
             new HashSet<>(),
-            new ArrayList<>()
+            new ArrayList<>(),
+            0L  // version
         );
 
         // Then

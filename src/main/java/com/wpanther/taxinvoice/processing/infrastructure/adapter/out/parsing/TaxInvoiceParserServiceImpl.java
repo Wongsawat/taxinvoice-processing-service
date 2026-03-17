@@ -336,9 +336,8 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
         List<LineItem> items = new ArrayList<>();
 
-        for (int i = 0; i < jaxbItems.size(); i++) {
-            LineItem item = mapLineItem(jaxbItems.get(i), currency);
-            items.add(item);
+        for (SupplyChainTradeLineItemType jaxbItem : jaxbItems) {
+            items.add(mapLineItem(jaxbItem, currency));
         }
 
         return items;

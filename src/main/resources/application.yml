@@ -99,8 +99,8 @@ logging:
   level:
     root: INFO
     com.wpanther.taxinvoice.processing: DEBUG
-    org.apache.camel: DEBUG
-    org.apache.camel.component.kafka: DEBUG
+    org.apache.camel: INFO
+    org.apache.camel.component.kafka: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
