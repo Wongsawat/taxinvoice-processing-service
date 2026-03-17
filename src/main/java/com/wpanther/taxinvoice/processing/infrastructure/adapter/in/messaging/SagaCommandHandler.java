@@ -25,6 +25,13 @@ public class SagaCommandHandler {
     /**
      * Handle a ProcessTaxInvoiceCommand from saga orchestrator.
      * Delegates to use case which handles business logic and reply publishing.
+     *
+     * <p>All exceptions are caught here — including unexpected runtime exceptions from
+     * infrastructure (e.g., outbox write failure inside {@code publishFailure()}) — to
+     * prevent Camel from retrying the message. Camel retries would re-run the idempotency
+     * check, which passes when no record has been persisted yet, causing the same XML to
+     * be re-parsed and potentially re-processed. Saga failure recovery is the orchestrator's
+     * responsibility (via timeout and compensation), not Camel's retry loop.
      */
     public void handleProcessCommand(ProcessTaxInvoiceCommand command) {
         log.info("Handling ProcessTaxInvoiceCommand for saga {} document {}",
@@ -38,8 +45,9 @@ public class SagaCommandHandler {
                 command.getSagaStep(),
                 command.getCorrelationId()
             );
-        } catch (ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException e) {
-            // Reply already published by use case on failure
+        } catch (Exception e) {
+            // Reply was already published (or attempted) by the use case.
+            // Suppress the exception so Camel commits the offset without retrying.
             log.error("Failed to process tax invoice for saga {}: {}",
                 command.getSagaId(), e.getMessage(), e);
         }
