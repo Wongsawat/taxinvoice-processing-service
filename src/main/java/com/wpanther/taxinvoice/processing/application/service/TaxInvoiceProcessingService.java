@@ -49,6 +49,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     private final Counter processSuccessCounter;
     private final Counter processFailureCounter;
     private final Counter processIdempotentCounter;
+    private final Counter processConcurrentDuplicateCounter;
     private final Counter compensateSuccessCounter;
     private final Counter compensateFailureCounter;
     private final Timer processingTimer;
@@ -80,6 +81,9 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         this.processIdempotentCounter = Counter.builder("taxinvoice.processing.idempotent")
             .description("Number of duplicate processing requests handled idempotently")
             .register(meterRegistry);
+        this.processConcurrentDuplicateCounter = Counter.builder("taxinvoice.processing.concurrent_duplicate")
+            .description("Number of DataIntegrityViolationExceptions resolved as concurrent duplicate inserts")
+            .register(meterRegistry);
         this.compensateSuccessCounter = Counter.builder("taxinvoice.compensation.success")
             .description("Number of successful compensations")
             .register(meterRegistry);
@@ -108,29 +112,29 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.getMessage());
             throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.getMessage(), e);
         } catch (DataIntegrityViolationException e) {
-            processFailureCounter.increment();
             // Race condition: the outer transaction is ROLLBACK_ONLY after the constraint
             // violation. Re-check in a fresh REQUIRES_NEW transaction: if the document now
             // exists, a concurrent thread committed it first and we must reply SUCCESS —
             // not FAILURE — so the orchestrator is not tricked into compensating already-
             // committed work.
+            // Note: do NOT increment any counter here — increment only after the re-check
+            // determines the actual outcome to avoid double-counting.
             log.warn("DataIntegrityViolationException for document {}, saga {} — re-checking for concurrent insert",
                     documentId, sagaId);
             requiresNewTemplate.execute(txStatus -> {
                 Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
                 if (existing.isPresent()) {
                     // Concurrent thread committed the same document first; treat as idempotent success.
-                    // Note: processFailureCounter was already incremented above;
-                    // incrementing processSuccessCounter here reflects the actual outcome.
                     log.warn("Race condition resolved: document {} already committed by concurrent thread — replying SUCCESS",
                             documentId);
-                    processSuccessCounter.increment();
+                    processConcurrentDuplicateCounter.increment();
                     // publishSuccess uses MANDATORY and joins this REQUIRES_NEW transaction atomically
                     sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                 } else {
                     // No record found — genuine constraint violation from another cause
                     log.error("DataIntegrityViolationException for document {} but no record found — replying FAILURE",
                             documentId);
+                    processFailureCounter.increment();
                     sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
                             "Duplicate document: " + e.getMessage());
                 }
