@@ -281,7 +281,7 @@ public class ProcessedTaxInvoice {
         }
 
         public Builder items(List<LineItem> items) {
-            this.items = items;
+            this.items = new ArrayList<>(items);  // defensive copy — prevents addItem() from mutating caller's list
             return this;
         }
 

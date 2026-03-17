@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletionException;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -96,67 +95,55 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     @Transactional
     public void process(String documentId, String xmlContent,
                          String sagaId, SagaStep sagaStep, String correlationId) throws TaxInvoiceProcessingException {
+        Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            processingTimer.record(() -> {
-                try {
-                    processInvoiceForSagaInternal(documentId, xmlContent, sagaId, sagaStep, correlationId);
+            processInvoiceForSagaInternal(documentId, xmlContent, sagaId, sagaStep, correlationId);
+            processSuccessCounter.increment();
+        } catch (TaxInvoiceParserPort.TaxInvoiceParsingException e) {
+            processFailureCounter.increment();
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.getMessage());
+            throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.getMessage(), e);
+        } catch (DataIntegrityViolationException e) {
+            processFailureCounter.increment();
+            // Race condition: the outer transaction is ROLLBACK_ONLY after the constraint
+            // violation. Re-check in a fresh REQUIRES_NEW transaction: if the document now
+            // exists, a concurrent thread committed it first and we must reply SUCCESS —
+            // not FAILURE — so the orchestrator is not tricked into compensating already-
+            // committed work.
+            log.warn("DataIntegrityViolationException for document {}, saga {} — re-checking for concurrent insert",
+                    documentId, sagaId);
+            requiresNewTemplate.execute(txStatus -> {
+                Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
+                if (existing.isPresent()) {
+                    // Concurrent thread committed the same document first; treat as idempotent success.
+                    // Note: processFailureCounter was already incremented above;
+                    // incrementing processSuccessCounter here reflects the actual outcome.
+                    log.warn("Race condition resolved: document {} already committed by concurrent thread — replying SUCCESS",
+                            documentId);
                     processSuccessCounter.increment();
-                } catch (TaxInvoiceParserPort.TaxInvoiceParsingException e) {
-                    processFailureCounter.increment();
-                    throw new CompletionException(e);
-                } catch (RuntimeException e) {
-                    processFailureCounter.increment();
-                    throw new CompletionException(e);  // Wrap to ensure outer catch handles it
+                    // publishSuccess uses MANDATORY and joins this REQUIRES_NEW transaction atomically
+                    sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+                } else {
+                    // No record found — genuine constraint violation from another cause
+                    log.error("DataIntegrityViolationException for document {} but no record found — replying FAILURE",
+                            documentId);
+                    sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                            "Duplicate document: " + e.getMessage());
                 }
+                return null;
             });
-        } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof DataIntegrityViolationException divException) {
-                // Race condition: the outer transaction is ROLLBACK_ONLY after the constraint
-                // violation. Re-check in a fresh REQUIRES_NEW transaction: if the document now
-                // exists, a concurrent thread committed it first and we must reply SUCCESS —
-                // not FAILURE — so the orchestrator is not tricked into compensating already-
-                // committed work.
-                log.warn("DataIntegrityViolationException for document {}, saga {} — re-checking for concurrent insert",
-                        documentId, sagaId);
-                requiresNewTemplate.execute(txStatus -> {
-                    Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
-                    if (existing.isPresent()) {
-                        // Concurrent thread committed the same document first; treat as idempotent success.
-                        // Note: processFailureCounter was already incremented inside the timer lambda;
-                        // incrementing processSuccessCounter here reflects the actual outcome.
-                        log.warn("Race condition resolved: document {} already committed by concurrent thread — replying SUCCESS",
-                                documentId);
-                        processSuccessCounter.increment();
-                        // publishSuccess uses MANDATORY and joins this REQUIRES_NEW transaction atomically
-                        sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
-                    } else {
-                        // No record found — genuine constraint violation from another cause
-                        log.error("DataIntegrityViolationException for document {} but no record found — replying FAILURE",
-                                documentId);
-                        sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                                "Duplicate document: " + divException.getMessage());
-                    }
-                    return null;
-                });
-                // Always throw so Spring does not try to commit the ROLLBACK_ONLY outer
-                // transaction (which would raise UnexpectedRollbackException past SagaCommandHandler).
-                throw new TaxInvoiceProcessingException(
-                    "Concurrent insert for document: " + documentId, divException);
-            } else if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException parseException) {
-                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + parseException.getMessage());
-                throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + parseException.getMessage(), parseException);
-            } else if (cause instanceof RuntimeException runtimeException) {
-                // For unexpected runtime errors (DB failures, etc.), publish failure reply to avoid hanging the saga.
-                // publishFailure uses REQUIRES_NEW propagation - it commits in its own independent transaction
-                // and succeeds even if the outer transaction is ROLLBACK_ONLY or its Hibernate session is invalid.
-                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Processing error: " + runtimeException.getMessage());
-                throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + runtimeException.getMessage(), runtimeException);
-            } else {
-                // Unknown error type - publish failure and wrap
-                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Unexpected error: " + (cause != null ? cause.getMessage() : "unknown cause"));
-                throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + (cause != null ? cause.getMessage() : "unknown cause"), e);
-            }
+            // Always throw so Spring does not try to commit the ROLLBACK_ONLY outer
+            // transaction (which would raise UnexpectedRollbackException past SagaCommandHandler).
+            throw new TaxInvoiceProcessingException("Concurrent insert for document: " + documentId, e);
+        } catch (Exception e) {
+            processFailureCounter.increment();
+            // publishFailure uses REQUIRES_NEW propagation — commits in its own independent
+            // transaction even if the outer transaction is ROLLBACK_ONLY or the Hibernate
+            // session is invalid.
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Processing error: " + e.getMessage());
+            throw new TaxInvoiceProcessingException("Failed to process tax invoice: " + e.getMessage(), e);
+        } finally {
+            sample.stop(processingTimer);
         }
     }
 
