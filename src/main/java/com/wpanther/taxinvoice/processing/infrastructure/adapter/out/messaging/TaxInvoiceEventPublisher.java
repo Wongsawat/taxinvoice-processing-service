@@ -1,7 +1,8 @@
 package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging;
 
+import com.wpanther.taxinvoice.processing.application.dto.event.TaxInvoiceProcessedEvent;
 import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,21 +30,30 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publish(TaxInvoiceProcessedEvent event) {
+    public void publish(TaxInvoiceProcessedDomainEvent domainEvent) {
+        // Transform: domain event → Kafka event
+        TaxInvoiceProcessedEvent kafkaEvent = new TaxInvoiceProcessedEvent(
+            domainEvent.invoiceId().value().toString(),
+            domainEvent.invoiceNumber(),
+            domainEvent.total().amount(),
+            domainEvent.total().currency(),
+            domainEvent.correlationId()
+        );
+
         Map<String, String> headers = Map.of(
-            "correlationId", event.getCorrelationId(),
-            "invoiceNumber", event.getInvoiceNumber()
+            "correlationId", domainEvent.correlationId(),
+            "invoiceNumber", domainEvent.invoiceNumber()
         );
 
         outboxService.saveWithRouting(
-            event,
+            kafkaEvent,
             "ProcessedTaxInvoice",
-            event.getInvoiceId(),
+            domainEvent.invoiceId().value().toString(),
             taxinvoiceProcessedTopic,
-            event.getInvoiceId(),
+            domainEvent.invoiceId().value().toString(),
             headerSerializer.toJson(headers)
         );
 
-        log.info("Published TaxInvoiceProcessedEvent to outbox: {}", event.getInvoiceNumber());
+        log.info("Published TaxInvoiceProcessedEvent to outbox: {}", domainEvent.invoiceNumber());
     }
 }

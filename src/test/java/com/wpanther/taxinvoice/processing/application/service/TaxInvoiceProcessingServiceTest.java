@@ -4,7 +4,7 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
@@ -108,7 +108,7 @@ class TaxInvoiceProcessingServiceTest {
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(parserService).parse("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
-        verify(eventPublisher).publish(any(TaxInvoiceProcessedEvent.class));
+        verify(eventPublisher).publish(any(TaxInvoiceProcessedDomainEvent.class));
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
     }
 
@@ -158,14 +158,14 @@ class TaxInvoiceProcessingServiceTest {
         service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
 
         // Then
-        ArgumentCaptor<TaxInvoiceProcessedEvent> eventCaptor =
-            ArgumentCaptor.forClass(TaxInvoiceProcessedEvent.class);
+        ArgumentCaptor<TaxInvoiceProcessedDomainEvent> eventCaptor =
+            ArgumentCaptor.forClass(TaxInvoiceProcessedDomainEvent.class);
         verify(eventPublisher).publish(eventCaptor.capture());
 
-        TaxInvoiceProcessedEvent processedEvent = eventCaptor.getValue();
-        assertEquals("TXN-001", processedEvent.getInvoiceNumber());
-        assertEquals("THB", processedEvent.getCurrency());
-        assertEquals("correlation-123", processedEvent.getCorrelationId());
+        TaxInvoiceProcessedDomainEvent processedEvent = eventCaptor.getValue();
+        assertEquals("TXN-001", processedEvent.invoiceNumber());
+        assertEquals("THB", processedEvent.total().currency());
+        assertEquals("correlation-123", processedEvent.correlationId());
     }
 
     @Test

@@ -1,7 +1,9 @@
 package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging;
 
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
+import com.wpanther.taxinvoice.processing.domain.model.Money;
+import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,12 +41,12 @@ class TaxInvoiceEventPublisherTest {
     @Test
     void testPublishTaxInvoiceProcessedSuccess() throws Exception {
         // Given
-        TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            "invoice-123",
+        TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
+            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440000"),
             "TXN-001",
-            new java.math.BigDecimal("10000.00"),
-            "THB",
-            "correlation-123"
+            Money.of(10000.00, "THB"),
+            "correlation-123",
+            java.time.Instant.now()
         );
 
         when(headerSerializer.toJson(any())).thenReturn("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"TXN-001\"}");
@@ -53,12 +55,13 @@ class TaxInvoiceEventPublisherTest {
         eventPublisher.publish(event);
 
         // Then
+        // Note: adapter transforms domain event to Kafka event, so we verify with any()
         verify(outboxService).saveWithRouting(
-            eq(event),
+            any(com.wpanther.taxinvoice.processing.application.dto.event.TaxInvoiceProcessedEvent.class),
             eq("ProcessedTaxInvoice"),
-            eq("invoice-123"),
+            eq("550e8400-e29b-41d4-a716-446655440000"),
             eq("taxinvoice.processed"),
-            eq("invoice-123"),
+            eq("550e8400-e29b-41d4-a716-446655440000"),
             eq("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"TXN-001\"}")
         );
     }
@@ -66,12 +69,12 @@ class TaxInvoiceEventPublisherTest {
     @Test
     void testPublishTaxInvoiceProcessedHeaderContent() throws Exception {
         // Given
-        TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            "invoice-123",
+        TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
+            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440001"),
             "TXN-001",
-            new java.math.BigDecimal("10000.00"),
-            "THB",
-            "correlation-123"
+            Money.of(10000.00, "THB"),
+            "correlation-123",
+            java.time.Instant.now()
         );
 
         when(headerSerializer.toJson(any())).thenReturn("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"TXN-001\"}");
@@ -98,12 +101,12 @@ class TaxInvoiceEventPublisherTest {
     @Test
     void testToJsonError() throws Exception {
         // Given
-        TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            "invoice-123",
+        TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
+            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440002"),
             "TXN-001",
-            new java.math.BigDecimal("10000.00"),
-            "THB",
-            "correlation-123"
+            Money.of(10000.00, "THB"),
+            "correlation-123",
+            java.time.Instant.now()
         );
 
         when(headerSerializer.toJson(any())).thenReturn(null);
@@ -128,12 +131,12 @@ class TaxInvoiceEventPublisherTest {
     @Test
     void testPublishUsesCorrectTopic() throws Exception {
         // Given
-        TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            "invoice-123",
+        TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
+            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440003"),
             "TXN-001",
-            new java.math.BigDecimal("10000.00"),
-            "THB",
-            "correlation-123"
+            Money.of(10000.00, "THB"),
+            "correlation-123",
+            java.time.Instant.now()
         );
 
         when(headerSerializer.toJson(any())).thenReturn("{}");
@@ -150,12 +153,12 @@ class TaxInvoiceEventPublisherTest {
     @Test
     void testPublishUsesInvoiceIdAsPartitionKey() throws Exception {
         // Given
-        TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            "invoice-456",
+        TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
+            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440004"),
             "TXN-002",
-            new java.math.BigDecimal("5000.00"),
-            "THB",
-            "correlation-456"
+            Money.of(5000.00, "THB"),
+            "correlation-456",
+            java.time.Instant.now()
         );
 
         when(headerSerializer.toJson(any())).thenReturn("{}");
@@ -166,6 +169,6 @@ class TaxInvoiceEventPublisherTest {
         // Then
         ArgumentCaptor<String> partitionKeyCaptor = ArgumentCaptor.forClass(String.class);
         verify(outboxService).saveWithRouting(any(), any(), any(), any(), partitionKeyCaptor.capture(), any());
-        assertEquals("invoice-456", partitionKeyCaptor.getValue());
+        assertEquals("550e8400-e29b-41d4-a716-446655440004", partitionKeyCaptor.getValue());
     }
 }

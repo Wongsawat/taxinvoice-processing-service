@@ -5,7 +5,7 @@ import com.wpanther.taxinvoice.processing.application.port.in.CompensateTaxInvoi
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;
@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletionException;
@@ -150,14 +151,14 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         invoiceRepository.save(saved);
 
         // Publish notification event (kept for notification-service)
-        TaxInvoiceProcessedEvent processedEvent = new TaxInvoiceProcessedEvent(
-            saved.getId().toString(),
+        TaxInvoiceProcessedDomainEvent domainEvent = new TaxInvoiceProcessedDomainEvent(
+            saved.getId(),
             saved.getInvoiceNumber(),
-            saved.getTotal().amount(),
-            saved.getCurrency(),
-            correlationId
+            saved.getTotal(),
+            correlationId,
+            Instant.now()
         );
-        eventPublisher.publish(processedEvent);
+        eventPublisher.publish(domainEvent);
 
         // Publish saga success reply
         sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);

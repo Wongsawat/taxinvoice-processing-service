@@ -1,16 +1,18 @@
 package com.wpanther.taxinvoice.processing.application.port.out;
 
-import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceProcessedEvent;
+import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 
 /**
- * Outbound port for publishing tax invoice processed events to Kafka.
- * Implemented by infrastructure adapters that publish events via outbox pattern.
+ * Outbound port for publishing tax invoice processed events.
+ * Application layer publishes the TaxInvoiceProcessedDomainEvent (pure domain event).
+ * Implementation: infrastructure/adapter/out/messaging/TaxInvoiceEventPublisher.
+ * The adapter translates the pure domain event into a Kafka DTO before writing to the outbox.
  */
 public interface TaxInvoiceEventPublishingPort {
 
     /**
-     * Publish a tax invoice processed event to Kafka.
-     * @param event the Kafka event to publish
+     * Publish a domain event indicating a tax invoice was successfully processed.
+     * Must be called within an active transaction (MANDATORY propagation on the adapter).
      */
-    void publish(TaxInvoiceProcessedEvent event);
+    void publish(TaxInvoiceProcessedDomainEvent event);
 }
