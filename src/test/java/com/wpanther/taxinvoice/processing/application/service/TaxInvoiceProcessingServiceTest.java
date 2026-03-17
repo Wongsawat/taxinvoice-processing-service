@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,18 +52,25 @@ class TaxInvoiceProcessingServiceTest {
     @Mock
     private SagaReplyPort sagaReplyPort;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private TaxInvoiceProcessingService service;
 
     private ProcessedTaxInvoice validInvoice;
 
     @BeforeEach
     void setUp() {
+        // transactionManager mock: getTransaction() returns null by default; TransactionTemplate
+        // still executes the callback, which is all we need for unit-testing the re-check logic.
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         service = new TaxInvoiceProcessingService(
             invoiceRepository,
             parserService,
             eventPublisher,
             sagaReplyPort,
-            new SimpleMeterRegistry()
+            new SimpleMeterRegistry(),
+            transactionManager
         );
         Party seller = Party.of(
             "Seller Company",
@@ -384,6 +393,32 @@ class TaxInvoiceProcessingServiceTest {
             eq("correlation-123"), anyString());
 
         // Domain event never published (invoice not committed)
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    @Test
+    void testProcessInvoiceForSagaRaceConditionResolvesAsSuccess() throws Exception {
+        // Given - race condition: idempotency check passes, insert conflicts, but on
+        // re-check the concurrent thread's record is already in the database.
+        when(invoiceRepository.findBySourceInvoiceId(anyString()))
+            .thenReturn(Optional.empty())          // 1st call: idempotency check — no record yet
+            .thenReturn(Optional.of(validInvoice)); // 2nd call: re-check — concurrent insert committed
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
+            .thenThrow(new DataIntegrityViolationException("duplicate key: source_invoice_id"));
+
+        // When / Then — exception still propagates (prevents Spring UnexpectedRollbackException)
+        ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
+            assertThrows(ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
+        assertInstanceOf(DataIntegrityViolationException.class, ex.getCause());
+
+        // SUCCESS reply published because the document was found on re-check
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
+        verify(sagaReplyPort, never()).publishFailure(any(), any(), any(), any());
+
+        // Domain event never published by this thread (the winning thread already did so)
         verify(eventPublisher, never()).publish(any());
     }
 }
