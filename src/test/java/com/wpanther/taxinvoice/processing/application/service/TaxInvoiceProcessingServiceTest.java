@@ -23,6 +23,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -359,5 +361,29 @@ class TaxInvoiceProcessingServiceTest {
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(invoiceRepository).deleteById(any());
         verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("corr-1"), contains("Compensation failed"));
+    }
+
+    @Test
+    void testProcessInvoiceForSagaDataIntegrityViolationPropagates() throws Exception {
+        // Given - simulate race condition: idempotency check passes but insert conflicts
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
+            .thenThrow(new DataIntegrityViolationException("duplicate key: source_invoice_id"));
+
+        // When / Then - exception propagates (no silent swallowing), with original cause preserved
+        ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
+            assertThrows(ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
+        assertInstanceOf(DataIntegrityViolationException.class, ex.getCause());
+
+        // publishFailure is attempted (in real Spring context with ROLLBACK_ONLY
+        // transaction this write would be lost, but the call must still be made)
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE),
+            eq("correlation-123"), anyString());
+
+        // Domain event never published (invoice not committed)
+        verify(eventPublisher, never()).publish(any());
     }
 }

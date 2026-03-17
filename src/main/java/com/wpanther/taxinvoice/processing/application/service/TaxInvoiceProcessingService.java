@@ -100,7 +100,21 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             });
         } catch (CompletionException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException parseException) {
+            if (cause instanceof DataIntegrityViolationException divException) {
+                // Race condition: another thread already inserted this document.
+                // The outer transaction is ROLLBACK_ONLY at this point, so the
+                // publishFailure() outbox write below will also be rolled back and lost.
+                // SagaCommandHandler swallows TaxInvoiceProcessingException, so Camel
+                // will NOT retry. The saga will time out. This is acceptable given
+                // partition affinity makes this case near-impossible in production.
+                log.warn("Race condition (duplicate key) detected for document {}, saga {}. " +
+                         "publishFailure() is attempted but will be lost (ROLLBACK_ONLY transaction); " +
+                         "saga will time out.", documentId, sagaId);
+                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                    "Duplicate document: " + divException.getMessage()); // best-effort; write will be rolled back
+                throw new TaxInvoiceProcessingException(
+                    "Duplicate key for document: " + documentId, divException);
+            } else if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException parseException) {
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + parseException.getMessage());
                 throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + parseException.getMessage(), parseException);
             } else if (cause instanceof RuntimeException runtimeException) {
@@ -137,12 +151,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         // State: PENDING → PROCESSING
         invoice.startProcessing();
 
-        // Save with race condition handling for idempotency
-        ProcessedTaxInvoice saved = saveWithIdempotencyHandling(invoice, documentId, sagaId, sagaStep, correlationId);
-        if (saved == null) {
-            // Race condition was handled - another thread already saved this invoice
-            return invoiceRepository.findBySourceInvoiceId(documentId).orElseThrow();
-        }
+        // Save - direct call (race conditions handled by Camel retry if they occur)
+        ProcessedTaxInvoice saved = invoiceRepository.save(invoice);
 
         log.info("Saved processed tax invoice: {}", saved.getInvoiceNumber());
 
@@ -165,25 +175,6 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
 
         log.info("Successfully processed tax invoice: {}", saved.getInvoiceNumber());
         return saved;
-    }
-
-    /**
-     * Save invoice with race condition handling for idempotency.
-     * If another thread already saved this invoice (DataIntegrityViolationException),
-     * returns null and the caller will fetch the existing invoice.
-     */
-    private ProcessedTaxInvoice saveWithIdempotencyHandling(ProcessedTaxInvoice invoice,
-            String documentId, String sagaId, SagaStep sagaStep, String correlationId) {
-        try {
-            return invoiceRepository.save(invoice);
-        } catch (DataIntegrityViolationException e) {
-            // Race condition: another thread already saved this invoice (same sourceInvoiceId)
-            // This is an idempotent success - fetch and return the existing invoice
-            log.warn("Race condition detected for document {}, fetching existing invoice", documentId);
-            // Still publish success for idempotent case
-            sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
-            return null;
-        }
     }
 
     /**
