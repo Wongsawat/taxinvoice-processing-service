@@ -48,7 +48,7 @@ public class SagaRouteConfig extends RouteBuilder {
     private String kafkaConsumerParams() {
         return "?brokers=RAW(" + kafkaBrokers + ")"
                 + "&groupId=" + GROUP_ID
-                + "&autoOffsetReset=latest"
+                + "&autoOffsetReset=earliest"
                 + "&autoCommitEnable=false"
                 + "&breakOnFirstError=true"
                 + "&maxPollRecords=" + MAX_POLL_RECORDS
