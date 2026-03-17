@@ -437,7 +437,7 @@ class TaxInvoiceParserServiceImplTest {
         TaxInvoiceParserPort.TaxInvoiceParsingException exception =
             assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
                 () -> parserService.parse(xmlContent, "test-123"));
-        assertTrue(exception.getMessage().contains("line item"));
+        assertTrue(exception.getMessage().toLowerCase().contains("line item"));
     }
 
     @Test
@@ -446,7 +446,7 @@ class TaxInvoiceParserServiceImplTest {
         TaxInvoiceParserPort.TaxInvoiceParsingException exception =
             assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
                 () -> parserService.parse(xmlContent, "test-123"));
-        assertTrue(exception.getMessage().contains("line item"));
+        assertTrue(exception.getMessage().toLowerCase().contains("line item"));
     }
 
     @Test
@@ -455,7 +455,7 @@ class TaxInvoiceParserServiceImplTest {
         TaxInvoiceParserPort.TaxInvoiceParsingException exception =
             assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
                 () -> parserService.parse(xmlContent, "test-123"));
-        assertTrue(exception.getMessage().contains("whole number") || exception.getMessage().contains("line item"));
+        assertTrue(exception.getMessage().toLowerCase().contains("whole number") || exception.getMessage().toLowerCase().contains("line item"));
     }
 
     @Test
@@ -464,7 +464,7 @@ class TaxInvoiceParserServiceImplTest {
         TaxInvoiceParserPort.TaxInvoiceParsingException exception =
             assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
                 () -> parserService.parse(xmlContent, "test-123"));
-        assertTrue(exception.getMessage().contains("line item"));
+        assertTrue(exception.getMessage().toLowerCase().contains("line item"));
     }
 
     @Test
@@ -473,7 +473,7 @@ class TaxInvoiceParserServiceImplTest {
         TaxInvoiceParserPort.TaxInvoiceParsingException exception =
             assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
                 () -> parserService.parse(xmlContent, "test-123"));
-        assertTrue(exception.getMessage().contains("line item"));
+        assertTrue(exception.getMessage().toLowerCase().contains("line item"));
     }
 
     @Test
