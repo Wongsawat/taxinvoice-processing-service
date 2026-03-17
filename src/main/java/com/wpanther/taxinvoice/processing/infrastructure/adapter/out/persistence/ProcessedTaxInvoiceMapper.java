@@ -57,11 +57,19 @@ public class ProcessedTaxInvoiceMapper {
      * Convert JPA entity to domain model
      */
     public ProcessedTaxInvoice toDomain(ProcessedTaxInvoiceEntity entity) {
+        // Validate entity is not null
+        Objects.requireNonNull(entity, "Entity cannot be null");
+        Objects.requireNonNull(entity.getParties(), "Entity parties cannot be null");
+        Objects.requireNonNull(entity.getLineItems(), "Entity line items cannot be null");
+
         // Find seller and buyer
         Party seller = null;
         Party buyer = null;
 
         for (TaxInvoicePartyEntity partyEntity : entity.getParties()) {
+            if (partyEntity == null) {
+                continue; // Skip null party entities
+            }
             Party party = toPartyDomain(partyEntity);
             if (partyEntity.getPartyType() == PartyType.SELLER) {
                 seller = party;
@@ -73,7 +81,9 @@ public class ProcessedTaxInvoiceMapper {
         // Convert line items
         List<LineItem> items = new ArrayList<>();
         for (TaxInvoiceLineItemEntity itemEntity : entity.getLineItems()) {
-            items.add(toLineItemDomain(itemEntity, entity.getCurrency()));
+            if (itemEntity != null) {
+                items.add(toLineItemDomain(itemEntity, entity.getCurrency()));
+            }
         }
 
         if (seller == null) {

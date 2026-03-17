@@ -427,13 +427,10 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
     }
 
     /**
-     * Convert XMLGregorianCalendar to LocalDate
+     * Convert XMLGregorianCalendar to LocalDate.
+     * Uses toGregorianCalendar() for robust handling of undefined fields.
      */
     private LocalDate convertXMLGregorianCalendarToLocalDate(XMLGregorianCalendar calendar) {
-        return LocalDate.of(
-            calendar.getYear(),
-            calendar.getMonth(),
-            calendar.getDay()
-        );
+        return calendar.toGregorianCalendar().toZonedDateTime().toLocalDate();
     }
 }

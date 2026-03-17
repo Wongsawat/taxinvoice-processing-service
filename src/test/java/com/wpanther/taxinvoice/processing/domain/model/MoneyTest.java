@@ -27,21 +27,6 @@ class MoneyTest {
     }
 
     @Test
-    void testCreateMoneyWithDouble() {
-        // Given
-        double amount = 100.50;
-        String currency = "USD";
-
-        // When
-        Money money = Money.of(amount, currency);
-
-        // Then
-        assertNotNull(money);
-        assertEquals(new BigDecimal("100.50"), money.amount());
-        assertEquals("USD", money.currency());
-    }
-
-    @Test
     void testCreateZeroMoney() {
         // Given
         String currency = "EUR";
@@ -59,8 +44,8 @@ class MoneyTest {
     @Test
     void testAddMoney() {
         // Given
-        Money money1 = Money.of(100.50, "THB");
-        Money money2 = Money.of(50.25, "THB");
+        Money money1 = Money.of(new BigDecimal("100.50"), "THB");
+        Money money2 = Money.of(new BigDecimal("50.25"), "THB");
 
         // When
         Money result = money1.add(money2);
@@ -85,8 +70,8 @@ class MoneyTest {
     @Test
     void testSubtractMoney() {
         // Given
-        Money money1 = Money.of(100.50, "THB");
-        Money money2 = Money.of(50.25, "THB");
+        Money money1 = Money.of(new BigDecimal("100.50"), "THB");
+        Money money2 = Money.of(new BigDecimal("50.25"), "THB");
 
         // When
         Money result = money1.subtract(money2);

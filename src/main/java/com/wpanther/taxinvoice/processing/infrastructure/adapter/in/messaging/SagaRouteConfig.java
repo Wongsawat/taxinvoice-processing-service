@@ -42,6 +42,19 @@ public class SagaRouteConfig extends RouteBuilder {
         this.sagaCommandHandler = sagaCommandHandler;
     }
 
+    /**
+     * Build common Kafka consumer parameters.
+     */
+    private String kafkaConsumerParams() {
+        return "?brokers=RAW(" + kafkaBrokers + ")"
+                + "&groupId=" + GROUP_ID
+                + "&autoOffsetReset=latest"
+                + "&autoCommitEnable=false"
+                + "&breakOnFirstError=true"
+                + "&maxPollRecords=" + MAX_POLL_RECORDS
+                + "&consumersCount=" + CONSUMERS_COUNT;
+    }
+
     @Override
     public void configure() throws Exception {
 
@@ -58,14 +71,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.command.tax-invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCommandTopic
-                + "?brokers=RAW(" + kafkaBrokers + ")"
-                + "&groupId=" + GROUP_ID
-                + "&autoOffsetReset=earliest"
-                + "&autoCommitEnable=false"
-                + "&breakOnFirstError=true"
-                + "&maxPollRecords=" + MAX_POLL_RECORDS
-                + "&consumersCount=" + CONSUMERS_COUNT)
+        from("kafka:" + sagaCommandTopic + kafkaConsumerParams())
             .routeId("saga-command-consumer")
             .log("Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
             .unmarshal().json(JsonLibrary.Jackson, ProcessTaxInvoiceCommand.class)
@@ -80,14 +86,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.compensation.tax-invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCompensationTopic
-                + "?brokers=RAW(" + kafkaBrokers + ")"
-                + "&groupId=" + GROUP_ID
-                + "&autoOffsetReset=earliest"
-                + "&autoCommitEnable=false"
-                + "&breakOnFirstError=true"
-                + "&maxPollRecords=" + MAX_POLL_RECORDS
-                + "&consumersCount=" + CONSUMERS_COUNT)
+        from("kafka:" + sagaCompensationTopic + kafkaConsumerParams())
             .routeId("saga-compensation-consumer")
             .log("Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
             .unmarshal().json(JsonLibrary.Jackson, CompensateTaxInvoiceCommand.class)

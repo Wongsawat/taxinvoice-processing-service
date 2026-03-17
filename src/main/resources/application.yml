@@ -85,7 +85,7 @@ management:
         include: health,info,metrics,prometheus,camelroutes
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
   metrics:
     tags:
       application: ${spring.application.name}
@@ -99,9 +99,15 @@ logging:
   level:
     root: INFO
     com.wpanther.taxinvoice.processing: DEBUG
-    org.apache.camel: INFO
+    org.apache.camel: DEBUG
     org.apache.camel.component.kafka: DEBUG
-    org.hibernate.SQL: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# Dev profile - additional debugging
+spring.config.activate.on-profile: dev
+logging:
+  level:
+    org.hibernate.SQL: DEBUG

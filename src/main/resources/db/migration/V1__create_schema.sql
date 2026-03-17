@@ -17,7 +17,6 @@ CREATE TABLE processed_tax_invoices (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_tax_invoice_number ON processed_tax_invoices(invoice_number);
 CREATE INDEX idx_tax_source_invoice_id ON processed_tax_invoices(source_invoice_id);
 CREATE INDEX idx_tax_status ON processed_tax_invoices(status);
 CREATE INDEX idx_tax_issue_date ON processed_tax_invoices(issue_date);
