@@ -31,12 +31,11 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
 
         UUID id = invoice.getId().value();
 
-        // Use existsById for lightweight existence check (single COUNT query)
-        // instead of findById which loads entire entity with JOIN FETCH
-        if (jpaRepository.existsById(id)) {
-            // Entity exists - fetch and update only mutable fields
+        Optional<ProcessedTaxInvoiceEntity> existing = jpaRepository.findById(id);
+        if (existing.isPresent()) {
+            // Entity exists - update only mutable fields
             // (parties/lineItems are immutable after creation)
-            ProcessedTaxInvoiceEntity entity = jpaRepository.findById(id).orElseThrow();
+            ProcessedTaxInvoiceEntity entity = existing.get();
             entity.setStatus(invoice.getStatus());
             entity.setErrorMessage(invoice.getErrorMessage());
             entity.setCompletedAt(invoice.getCompletedAt());

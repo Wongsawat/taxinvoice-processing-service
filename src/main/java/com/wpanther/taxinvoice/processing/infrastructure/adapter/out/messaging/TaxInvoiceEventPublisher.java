@@ -37,6 +37,7 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
             domainEvent.invoiceNumber(),
             domainEvent.total().amount(),
             domainEvent.total().currency(),
+            domainEvent.sagaId(),
             domainEvent.correlationId()
         );
 

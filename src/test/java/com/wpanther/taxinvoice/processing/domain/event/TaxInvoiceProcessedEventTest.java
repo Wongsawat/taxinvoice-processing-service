@@ -20,11 +20,12 @@ class TaxInvoiceProcessedEventTest {
         String invoiceNumber = "TXN-001";
         BigDecimal total = new BigDecimal("10000.00");
         String currency = "THB";
+        String sagaId = "saga-123";
         String correlationId = "correlation-123";
 
         // When
         TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            invoiceId, invoiceNumber, total, currency, correlationId
+            invoiceId, invoiceNumber, total, currency, sagaId, correlationId
         );
 
         // Then
@@ -33,6 +34,7 @@ class TaxInvoiceProcessedEventTest {
         assertEquals(invoiceNumber, event.getInvoiceNumber());
         assertEquals(total, event.getTotal());
         assertEquals(currency, event.getCurrency());
+        assertEquals(sagaId, event.getSagaId());
         assertEquals(correlationId, event.getCorrelationId());
         assertEquals("taxinvoice.processed", event.getEventType());
         assertNotNull(event.getEventId());
@@ -50,6 +52,7 @@ class TaxInvoiceProcessedEventTest {
             "TXN-001",
             new BigDecimal("10000.00"),
             "THB",
+            "saga-123",
             "correlation-123"
         );
 

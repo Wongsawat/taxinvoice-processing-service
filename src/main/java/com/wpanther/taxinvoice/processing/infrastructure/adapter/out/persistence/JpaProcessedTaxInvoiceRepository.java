@@ -17,11 +17,6 @@ import java.util.UUID;
 public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<ProcessedTaxInvoiceEntity, UUID> {
 
     /**
-     * Find by invoice number
-     */
-    Optional<ProcessedTaxInvoiceEntity> findByInvoiceNumber(String invoiceNumber);
-
-    /**
      * Find by invoice number with parties and line items eagerly loaded (avoids N+1 queries and LazyInitializationException)
      */
     @Query("SELECT i FROM ProcessedTaxInvoiceEntity i " +
@@ -31,11 +26,6 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
     Optional<ProcessedTaxInvoiceEntity> findByInvoiceNumberWithDetails(@Param("invoiceNumber") String invoiceNumber);
 
     /**
-     * Find by source invoice ID
-     */
-    Optional<ProcessedTaxInvoiceEntity> findBySourceInvoiceId(String sourceInvoiceId);
-
-    /**
      * Find by source invoice ID with parties and line items eagerly loaded (avoids N+1 queries)
      */
     @Query("SELECT i FROM ProcessedTaxInvoiceEntity i " +
@@ -43,11 +33,6 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
            "LEFT JOIN FETCH i.lineItems " +
            "WHERE i.sourceInvoiceId = :sourceInvoiceId")
     Optional<ProcessedTaxInvoiceEntity> findBySourceInvoiceIdWithDetails(@Param("sourceInvoiceId") String sourceInvoiceId);
-
-    /**
-     * Find by processing status
-     */
-    List<ProcessedTaxInvoiceEntity> findByStatus(ProcessingStatus status);
 
     /**
      * Check if invoice number exists

@@ -45,6 +45,7 @@ class TaxInvoiceEventPublisherTest {
             TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440000"),
             "TXN-001",
             Money.of(10000.00, "THB"),
+            "saga-123",
             "correlation-123",
             java.time.Instant.now()
         );
@@ -73,6 +74,7 @@ class TaxInvoiceEventPublisherTest {
             TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440001"),
             "TXN-001",
             Money.of(10000.00, "THB"),
+            "saga-123",
             "correlation-123",
             java.time.Instant.now()
         );
@@ -105,6 +107,7 @@ class TaxInvoiceEventPublisherTest {
             TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440002"),
             "TXN-001",
             Money.of(10000.00, "THB"),
+            "saga-123",
             "correlation-123",
             java.time.Instant.now()
         );
@@ -135,6 +138,7 @@ class TaxInvoiceEventPublisherTest {
             TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440003"),
             "TXN-001",
             Money.of(10000.00, "THB"),
+            "saga-123",
             "correlation-123",
             java.time.Instant.now()
         );
@@ -157,6 +161,7 @@ class TaxInvoiceEventPublisherTest {
             TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440004"),
             "TXN-002",
             Money.of(5000.00, "THB"),
+            "saga-456",
             "correlation-456",
             java.time.Instant.now()
         );

@@ -30,8 +30,13 @@ import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.xml.sax.InputSource;
 
+import javax.xml.XMLConstants;
 import javax.xml.datatype.XMLGregorianCalendar;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.transform.sax.SAXSource;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -48,6 +53,7 @@ import java.util.Optional;
 public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
     private final JAXBContext jaxbContext;
+    private final SAXParserFactory saxParserFactory;
 
     public TaxInvoiceParserServiceImpl() {
         try {
@@ -64,6 +70,19 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         } catch (JAXBException e) {
             log.error("Failed to initialize JAXB context", e);
             throw new IllegalStateException("Failed to initialize XML parser", e);
+        }
+
+        try {
+            // Secure SAX parser factory — disables external entities and DOCTYPE to prevent XXE/XML-bomb attacks
+            SAXParserFactory factory = SAXParserFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            this.saxParserFactory = factory;
+        } catch (ParserConfigurationException | org.xml.sax.SAXException e) {
+            throw new IllegalStateException("Failed to initialize secure SAX parser factory", e);
         }
     }
 
@@ -132,7 +151,11 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
             Object result;
             try (StringReader reader = new StringReader(xmlContent)) {
-                result = unmarshaller.unmarshal(reader);
+                SAXSource saxSource = new SAXSource(
+                    saxParserFactory.newSAXParser().getXMLReader(),
+                    new InputSource(reader)
+                );
+                result = unmarshaller.unmarshal(saxSource);
             }
 
             // Handle JAXBElement wrapper (common when no @XmlRootElement annotation)
@@ -149,7 +172,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
             return (TaxInvoice_CrossIndustryInvoiceType) result;
 
-        } catch (JAXBException e) {
+        } catch (JAXBException | org.xml.sax.SAXException | ParserConfigurationException e) {
             log.error("JAXB unmarshalling failed", e);
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Failed to parse XML: " + e.getMessage(), e);
         }

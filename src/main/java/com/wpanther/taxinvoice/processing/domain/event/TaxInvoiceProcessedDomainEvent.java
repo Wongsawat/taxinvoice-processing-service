@@ -14,6 +14,7 @@ public record TaxInvoiceProcessedDomainEvent(
     TaxInvoiceId invoiceId,
     String invoiceNumber,
     Money total,
+    String sagaId,
     String correlationId,
     Instant occurredAt
 ) {}

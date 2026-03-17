@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.io.Reader;
+import javax.xml.transform.sax.SAXSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -46,7 +46,7 @@ class TaxInvoiceParserServiceImplTest {
             Unmarshaller mockUnmarshaller = mock(Unmarshaller.class);
             mockedJaxb.when(() -> JAXBContext.newInstance(anyString())).thenReturn(mockContext);
             when(mockContext.createUnmarshaller()).thenReturn(mockUnmarshaller);
-            when(mockUnmarshaller.unmarshal(any(Reader.class))).thenReturn("unexpected-string-type");
+            when(mockUnmarshaller.unmarshal(any(SAXSource.class))).thenReturn("unexpected-string-type");
 
             TaxInvoiceParserServiceImpl service = new TaxInvoiceParserServiceImpl();
             TaxInvoiceParserPort.TaxInvoiceParsingException ex = assertThrows(

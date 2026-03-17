@@ -181,6 +181,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             saved.getId(),
             saved.getInvoiceNumber(),
             saved.getTotal(),
+            sagaId,
             correlationId,
             Instant.now()
         );
