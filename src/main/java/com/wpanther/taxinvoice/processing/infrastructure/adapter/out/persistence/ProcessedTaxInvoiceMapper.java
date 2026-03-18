@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistenc
 
 import com.wpanther.taxinvoice.processing.domain.model.*;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence.TaxInvoicePartyEntity.PartyType;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -10,6 +11,7 @@ import java.util.*;
  * Mapper between domain model and JPA entities
  */
 @Component
+@Slf4j
 public class ProcessedTaxInvoiceMapper {
 
     /**
@@ -93,6 +95,19 @@ public class ProcessedTaxInvoiceMapper {
         if (buyer == null) {
             throw new IllegalStateException(
                 "No BUYER party found for invoice " + entity.getId());
+        }
+
+        // Warn on null taxIdentifier — required by Thai e-Tax specification but stored as
+        // nullable to support legacy rows that predate the parser's enforcement of the field.
+        if (seller.taxIdentifier() == null) {
+            log.warn("Seller party has null taxIdentifier for invoice {} — violates Thai e-Tax "
+                + "specification; likely a legacy DB row predating parser enforcement",
+                entity.getId());
+        }
+        if (buyer.taxIdentifier() == null) {
+            log.warn("Buyer party has null taxIdentifier for invoice {} — violates Thai e-Tax "
+                + "specification; likely a legacy DB row predating parser enforcement",
+                entity.getId());
         }
 
         // Build domain object
