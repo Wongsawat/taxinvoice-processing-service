@@ -36,7 +36,7 @@ public record Money(BigDecimal amount, String currency) implements Serializable 
      * Create Money instance from double.
      * @deprecated Use {@link #of(BigDecimal, String)} instead to avoid floating-point precision issues.
      */
-    @Deprecated
+    @Deprecated(forRemoval = true, since = "1.0")
     public static Money of(double amount, String currency) {
         return new Money(BigDecimal.valueOf(amount), currency);
     }
