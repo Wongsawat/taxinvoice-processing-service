@@ -407,8 +407,13 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Line item unit price is missing");
         }
         TradePriceType priceType = agreement.getGrossPriceProductTradePrice();
-        if (priceType.getChargeAmount() == null || priceType.getChargeAmount().size() == 0) {
+        if (priceType.getChargeAmount() == null || priceType.getChargeAmount().isEmpty()) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Line item price amount is missing");
+        }
+        if (priceType.getChargeAmount().size() > 1) {
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "Line item has " + priceType.getChargeAmount().size() + " price amounts; "
+                + "exactly one ChargeAmount is expected per GrossPriceProductTradePrice");
         }
         BigDecimal unitPriceAmount = priceType.getChargeAmount().get(0).getValue();
         Money unitPrice = Money.of(unitPriceAmount, currency);

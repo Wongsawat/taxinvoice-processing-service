@@ -477,6 +477,16 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     @Test
+    void testParseTaxInvoiceWithLineItemMultipleChargeAmounts() {
+        String xmlContent = getTaxInvoiceXmlWithLineItemMultipleChargeAmounts();
+        TaxInvoiceParserPort.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("price amounts"),
+            "Exception message should mention multiple price amounts but was: " + exception.getMessage());
+    }
+
+    @Test
     void testParseTaxInvoiceWithSellerTaxRegistrationNoId() {
         // Given: XML where SpecifiedTaxRegistration exists but has no ID child element
         // This triggers the taxReg.getID() == null check
@@ -1514,6 +1524,26 @@ class TaxInvoiceParserServiceImplTest {
               </ram:SpecifiedTradeProduct>
               <ram:SpecifiedLineTradeAgreement>
                 <ram:GrossPriceProductTradePrice>
+                </ram:GrossPriceProductTradePrice>
+              </ram:SpecifiedLineTradeAgreement>
+              <ram:SpecifiedLineTradeDelivery>
+                <ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>
+              </ram:SpecifiedLineTradeDelivery>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithLineItemMultipleChargeAmounts() {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedTradeProduct>
+                <ram:Name>Professional Services</ram:Name>
+              </ram:SpecifiedTradeProduct>
+              <ram:SpecifiedLineTradeAgreement>
+                <ram:GrossPriceProductTradePrice>
+                  <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                  <ram:ChargeAmount>900.00</ram:ChargeAmount>
                 </ram:GrossPriceProductTradePrice>
               </ram:SpecifiedLineTradeAgreement>
               <ram:SpecifiedLineTradeDelivery>
