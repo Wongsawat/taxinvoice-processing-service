@@ -57,7 +57,7 @@ public class SagaCommandHandler {
             // Reply was already committed to the outbox by the use case.
             // Return normally so Camel commits the Kafka offset.
             log.error("Failed to process tax invoice for saga {}: {}",
-                command.getSagaId(), e.getMessage(), e);
+                command.getSagaId(), e.toString(), e);
         }
     }
 
