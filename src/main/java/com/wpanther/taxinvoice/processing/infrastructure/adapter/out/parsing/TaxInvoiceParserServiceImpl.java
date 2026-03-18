@@ -151,10 +151,14 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
             Object result;
             try (StringReader reader = new StringReader(xmlContent)) {
-                SAXSource saxSource = new SAXSource(
-                    saxParserFactory.newSAXParser().getXMLReader(),
-                    new InputSource(reader)
-                );
+                org.xml.sax.XMLReader xmlReader = saxParserFactory.newSAXParser().getXMLReader();
+                // Defense-in-depth: explicitly re-apply FEATURE_SECURE_PROCESSING on the
+                // XMLReader at point of use, not just on the factory. This caps entity
+                // expansion (JDK limits to 64,000 expansions) as a second guard against
+                // billion-laughs attacks in case the factory-level feature was not fully
+                // propagated by the underlying parser implementation.
+                xmlReader.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+                SAXSource saxSource = new SAXSource(xmlReader, new InputSource(reader));
                 result = unmarshaller.unmarshal(saxSource);
             }
 
