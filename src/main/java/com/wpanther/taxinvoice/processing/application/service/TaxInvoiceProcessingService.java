@@ -114,14 +114,30 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.toString());
             throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.toString(), e);
         } catch (DataIntegrityViolationException e) {
-            // Race condition: the outer transaction is ROLLBACK_ONLY after the constraint
-            // violation. Re-check in a fresh REQUIRES_NEW transaction: if the document now
-            // exists, a concurrent thread committed it first and we must reply SUCCESS —
-            // not FAILURE — so the orchestrator is not tricked into compensating already-
+            // Narrow: only the source_invoice_id unique-key violation represents a
+            // race-condition duplicate insert. Other DIVE causes (value-too-long,
+            // check-constraint, etc.) must not be misreported as duplicate-document
+            // races, and must not increment processConcurrentDuplicateCounter.
+            boolean isDuplicateKey = e.getMessage() != null &&
+                (e.getMessage().contains("source_invoice_id") ||
+                 e.getMessage().contains("duplicate key"));
+            if (!isDuplicateKey) {
+                processFailureCounter.increment();
+                log.error("Constraint violation (non-duplicate-key) for document {}, saga {}: {}",
+                        documentId, sagaId, e.toString());
+                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                        "Constraint violation for document " + documentId + ": " + e.toString());
+                throw new TaxInvoiceProcessingException(
+                        "Constraint violation for document " + documentId, e);
+            }
+            // Duplicate-key on source_invoice_id: the outer transaction is ROLLBACK_ONLY.
+            // Re-check in a fresh REQUIRES_NEW transaction: if the document now exists,
+            // a concurrent thread committed it first and we must reply SUCCESS — not
+            // FAILURE — so the orchestrator is not tricked into compensating already-
             // committed work.
             // Note: do NOT increment any counter here — increment only after the re-check
             // determines the actual outcome to avoid double-counting.
-            log.warn("DataIntegrityViolationException for document {}, saga {} — re-checking for concurrent insert",
+            log.warn("DataIntegrityViolationException (duplicate key) for document {}, saga {} — re-checking for concurrent insert",
                     documentId, sagaId);
             requiresNewTemplate.execute(txStatus -> {
                 Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
@@ -133,12 +149,12 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                     // publishSuccess uses MANDATORY and joins this REQUIRES_NEW transaction atomically
                     sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                 } else {
-                    // No record found — genuine constraint violation from another cause
-                    log.error("DataIntegrityViolationException for document {} but no record found — replying FAILURE",
+                    // Duplicate-key signal but no record found — unexpected state
+                    log.error("DataIntegrityViolationException (duplicate key) for document {} but no record found — replying FAILURE",
                             documentId);
                     processFailureCounter.increment();
                     sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                            "Duplicate document: " + e.toString());
+                            "Duplicate key violation for document " + documentId + ": " + e.toString());
                 }
                 return null;
             });

@@ -347,4 +347,42 @@ class TaxInvoiceProcessingServiceTest {
         // Domain event never published by this thread (the winning thread already did so)
         verify(eventPublisher, never()).publish(any());
     }
+
+    /**
+     * A DataIntegrityViolationException whose message does NOT contain "duplicate key" or
+     * "source_invoice_id" (e.g. value-too-long, check-constraint) must:
+     *  - skip the race-condition re-check entirely (no second findBySourceInvoiceId call)
+     *  - publish FAILURE with "Constraint violation:" prefix, not "Duplicate document:"
+     *  - increment processFailureCounter, not processConcurrentDuplicateCounter
+     *  - throw TaxInvoiceProcessingException immediately
+     */
+    @Test
+    void testProcessInvoiceForSagaNonDuplicateKeyConstraintViolation() throws Exception {
+        // Given — data-too-long violation: message has no "duplicate key" or "source_invoice_id"
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
+            .thenThrow(new DataIntegrityViolationException(
+                "value too long for type character varying(500)"));
+
+        // When / Then — exception thrown immediately with accurate message
+        ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
+            assertThrows(ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
+        assertInstanceOf(DataIntegrityViolationException.class, ex.getCause());
+        assertTrue(ex.getMessage().contains("Constraint violation"),
+            "Exception message should say 'Constraint violation', not duplicate-document");
+
+        // FAILURE reply published with "Constraint violation:" prefix — not "Duplicate document:"
+        verify(sagaReplyPort).publishFailure(
+            eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("correlation-123"),
+            contains("Constraint violation"));
+
+        // Re-check MUST NOT happen — transactionManager.getTransaction never called
+        verify(transactionManager, never()).getTransaction(any());
+
+        // Domain event never published
+        verify(eventPublisher, never()).publish(any());
+    }
 }
