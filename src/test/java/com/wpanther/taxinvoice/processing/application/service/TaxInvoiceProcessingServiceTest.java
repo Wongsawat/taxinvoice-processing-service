@@ -286,7 +286,7 @@ class TaxInvoiceProcessingServiceTest {
     @Test
     void testFindByStatusEmpty() {
         // Given
-        ProcessingStatus status = ProcessingStatus.FAILED;
+        ProcessingStatus status = ProcessingStatus.PROCESSING;
         when(invoiceRepository.findByStatus(status)).thenReturn(List.of());
 
         // When

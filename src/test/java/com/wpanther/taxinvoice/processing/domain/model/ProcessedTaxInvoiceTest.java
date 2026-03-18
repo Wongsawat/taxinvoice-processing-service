@@ -182,21 +182,6 @@ class ProcessedTaxInvoiceTest {
     }
 
     @Test
-    void testMarkFailed() {
-        // Given
-        ProcessedTaxInvoice invoice = validInvoiceBuilder.build();
-        String errorMessage = "Processing failed due to invalid data";
-
-        // When
-        invoice.markFailed(errorMessage);
-
-        // Then
-        assertEquals(ProcessingStatus.FAILED, invoice.getStatus());
-        assertEquals(errorMessage, invoice.getErrorMessage());
-        assertNotNull(invoice.getCompletedAt());
-    }
-
-    @Test
     void testNullId() {
         // When/Then
         assertThrows(NullPointerException.class, () ->

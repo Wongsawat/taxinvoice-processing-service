@@ -367,8 +367,8 @@ class ProcessedTaxInvoiceMapperTest {
 
     @Test
     void testToEntityWithErrorMessage() {
-        // Given
-        ProcessedTaxInvoice failedInvoice = ProcessedTaxInvoice.builder()
+        // Given — errorMessage is a nullable field independent of status
+        ProcessedTaxInvoice invoiceWithError = ProcessedTaxInvoice.builder()
             .id(TaxInvoiceId.generate())
             .sourceInvoiceId("intake-123")
             .invoiceNumber("INV-001")
@@ -379,15 +379,15 @@ class ProcessedTaxInvoiceMapperTest {
             .items(domainInvoice.getItems())
             .currency("THB")
             .originalXml("<xml>test</xml>")
-            .status(ProcessingStatus.FAILED)
+            .status(ProcessingStatus.PENDING)
             .errorMessage("Test error message")
             .build();
 
         // When
-        ProcessedTaxInvoiceEntity entity = mapper.toEntity(failedInvoice);
+        ProcessedTaxInvoiceEntity entity = mapper.toEntity(invoiceWithError);
 
         // Then
-        assertEquals(ProcessingStatus.FAILED, entity.getStatus());
+        assertEquals(ProcessingStatus.PENDING, entity.getStatus());
         assertEquals("Test error message", entity.getErrorMessage());
     }
 

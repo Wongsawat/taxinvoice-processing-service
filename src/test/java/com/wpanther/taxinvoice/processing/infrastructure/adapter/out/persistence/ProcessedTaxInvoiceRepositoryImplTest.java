@@ -259,22 +259,6 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     }
 
     @Test
-    void testSaveWithFailedStatus() {
-        // Given
-        testInvoice.markFailed("Test error message");
-
-        // When
-        ProcessedTaxInvoice saved = repository.save(testInvoice);
-        Optional<ProcessedTaxInvoice> found = repository.findById(saved.getId());
-
-        // Then
-        assertTrue(found.isPresent());
-        assertEquals(ProcessingStatus.FAILED, found.get().getStatus());
-        assertEquals("Test error message", found.get().getErrorMessage());
-        assertNotNull(found.get().getCompletedAt());
-    }
-
-    @Test
     void testFindByInvoiceNumber_found() {
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         Optional<ProcessedTaxInvoice> found = repository.findByInvoiceNumber(saved.getInvoiceNumber());

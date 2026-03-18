@@ -160,15 +160,6 @@ public class ProcessedTaxInvoice {
         this.completedAt = LocalDateTime.now();
     }
 
-    /**
-     * Mark invoice processing as failed
-     */
-    public void markFailed(String errorMessage) {
-        this.status = ProcessingStatus.FAILED;
-        this.errorMessage = errorMessage;
-        this.completedAt = LocalDateTime.now();
-    }
-
     // Getters
     public TaxInvoiceId getId() {
         return id;
