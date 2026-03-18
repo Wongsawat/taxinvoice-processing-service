@@ -2,10 +2,12 @@ package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistenc
 
 import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +40,19 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
      * Check if invoice number exists
      */
     boolean existsByInvoiceNumber(String invoiceNumber);
+
+    /**
+     * Update only the mutable state fields (status, errorMessage, completedAt).
+     * Used by save() on the update path to avoid loading the full entity.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ProcessedTaxInvoiceEntity i " +
+           "SET i.status = :status, i.errorMessage = :errorMessage, i.completedAt = :completedAt " +
+           "WHERE i.id = :id")
+    void updateStatusFields(@Param("id") UUID id,
+                            @Param("status") ProcessingStatus status,
+                            @Param("errorMessage") String errorMessage,
+                            @Param("completedAt") LocalDateTime completedAt);
 
     /**
      * Find invoice with parties and line items eagerly loaded
