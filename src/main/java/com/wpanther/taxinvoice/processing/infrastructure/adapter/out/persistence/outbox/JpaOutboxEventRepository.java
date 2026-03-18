@@ -53,7 +53,7 @@ public class JpaOutboxEventRepository implements OutboxEventRepository {
     public int deletePublishedBefore(java.time.Instant before) {
         log.debug("Deleting published events before: {}", before);
         int deletedCount = springRepository.deletePublishedBefore(before);
-        log.info("Deleted {} published events before: {}", deletedCount, before);
+        log.debug("Deleted {} published events before: {}", deletedCount, before);
         return deletedCount;
     }
 
