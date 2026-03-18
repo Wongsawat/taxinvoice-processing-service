@@ -113,8 +113,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             processSuccessCounter.increment();
         } catch (TaxInvoiceParserPort.TaxInvoiceParsingException e) {
             processFailureCounter.increment();
-            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.getMessage());
-            throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.getMessage(), e);
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.toString());
+            throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.toString(), e);
         } catch (DataIntegrityViolationException e) {
             // Race condition: the outer transaction is ROLLBACK_ONLY after the constraint
             // violation. Re-check in a fresh REQUIRES_NEW transaction: if the document now
@@ -140,7 +140,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                             documentId);
                     processFailureCounter.increment();
                     sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                            "Duplicate document: " + e.getMessage());
+                            "Duplicate document: " + e.toString());
                 }
                 return null;
             });
@@ -153,9 +153,9 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             // transaction even if the outer transaction is ROLLBACK_ONLY or the Hibernate
             // session is invalid.
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                    "Processing error for document " + documentId + ": " + e.getMessage());
+                    "Processing error for document " + documentId + ": " + e.toString());
             throw new TaxInvoiceProcessingException(
-                    "Failed to process tax invoice " + documentId + ": " + e.getMessage(), e);
+                    "Failed to process tax invoice " + documentId + ": " + e.toString(), e);
         } finally {
             sample.stop(processingTimer);
         }
@@ -234,8 +234,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             compensateSuccessCounter.increment();
         } catch (Exception e) {
             compensateFailureCounter.increment();
-            log.error("Failed to compensate tax invoice for saga {}: {}", sagaId, e.getMessage(), e);
-            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Compensation failed: " + e.getMessage());
+            log.error("Failed to compensate tax invoice for saga {}: {}", sagaId, e.toString(), e);
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Compensation failed: " + e.toString());
         }
     }
 
