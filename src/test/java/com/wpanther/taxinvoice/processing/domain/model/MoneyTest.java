@@ -58,8 +58,8 @@ class MoneyTest {
     @Test
     void testAddMoneyWithDifferentCurrency() {
         // Given
-        Money money1 = Money.of(100.00, "THB");
-        Money money2 = Money.of(50.00, "USD");
+        Money money1 = Money.of(new BigDecimal("100.00"), "THB");
+        Money money2 = Money.of(new BigDecimal("50.00"), "USD");
 
         // When/Then
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -84,8 +84,8 @@ class MoneyTest {
     @Test
     void testSubtractMoneyWithDifferentCurrency() {
         // Given
-        Money money1 = Money.of(100.00, "THB");
-        Money money2 = Money.of(50.00, "USD");
+        Money money1 = Money.of(new BigDecimal("100.00"), "THB");
+        Money money2 = Money.of(new BigDecimal("50.00"), "USD");
 
         // When/Then
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -96,7 +96,7 @@ class MoneyTest {
     @Test
     void testMultiplyByBigDecimal() {
         // Given
-        Money money = Money.of(100.00, "THB");
+        Money money = Money.of(new BigDecimal("100.00"), "THB");
         BigDecimal factor = new BigDecimal("1.5");
 
         // When
@@ -110,7 +110,7 @@ class MoneyTest {
     @Test
     void testMultiplyByDouble() {
         // Given
-        Money money = Money.of(100.00, "THB");
+        Money money = Money.of(new BigDecimal("100.00"), "THB");
         double factor = 2.5;
 
         // When
@@ -124,7 +124,7 @@ class MoneyTest {
     @Test
     void testMultiplyWithNull() {
         // Given
-        Money money = Money.of(100.00, "THB");
+        Money money = Money.of(new BigDecimal("100.00"), "THB");
 
         // When/Then
         assertThrows(NullPointerException.class, () -> money.multiply((BigDecimal) null));
@@ -133,8 +133,8 @@ class MoneyTest {
     @Test
     void testIsPositive() {
         // Given
-        Money positiveMoney = Money.of(100.00, "THB");
-        Money negativeMoney = Money.of(-100.00, "THB");
+        Money positiveMoney = Money.of(new BigDecimal("100.00"), "THB");
+        Money negativeMoney = Money.of(new BigDecimal("-100.00"), "THB");
         Money zeroMoney = Money.zero("THB");
 
         // When/Then
@@ -146,8 +146,8 @@ class MoneyTest {
     @Test
     void testIsNegative() {
         // Given
-        Money positiveMoney = Money.of(100.00, "THB");
-        Money negativeMoney = Money.of(-100.00, "THB");
+        Money positiveMoney = Money.of(new BigDecimal("100.00"), "THB");
+        Money negativeMoney = Money.of(new BigDecimal("-100.00"), "THB");
         Money zeroMoney = Money.zero("THB");
 
         // When/Then
@@ -159,7 +159,7 @@ class MoneyTest {
     @Test
     void testIsZero() {
         // Given
-        Money positiveMoney = Money.of(100.00, "THB");
+        Money positiveMoney = Money.of(new BigDecimal("100.00"), "THB");
         Money zeroMoney = Money.zero("THB");
 
         // When/Then
@@ -205,7 +205,7 @@ class MoneyTest {
     @Test
     void testToString() {
         // Given
-        Money money = Money.of(100.50, "THB");
+        Money money = Money.of(new BigDecimal("100.50"), "THB");
 
         // When
         String result = money.toString();
@@ -217,10 +217,10 @@ class MoneyTest {
     @Test
     void testEquality() {
         // Given
-        Money money1 = Money.of(100.50, "THB");
-        Money money2 = Money.of(100.50, "THB");
-        Money money3 = Money.of(100.51, "THB");
-        Money money4 = Money.of(100.50, "USD");
+        Money money1 = Money.of(new BigDecimal("100.50"), "THB");
+        Money money2 = Money.of(new BigDecimal("100.50"), "THB");
+        Money money3 = Money.of(new BigDecimal("100.51"), "THB");
+        Money money4 = Money.of(new BigDecimal("100.50"), "USD");
 
         // When/Then
         assertEquals(money1, money2);
@@ -231,8 +231,8 @@ class MoneyTest {
     @Test
     void testHashCode() {
         // Given
-        Money money1 = Money.of(100.50, "THB");
-        Money money2 = Money.of(100.50, "THB");
+        Money money1 = Money.of(new BigDecimal("100.50"), "THB");
+        Money money2 = Money.of(new BigDecimal("100.50"), "THB");
 
         // When/Then
         assertEquals(money1.hashCode(), money2.hashCode());

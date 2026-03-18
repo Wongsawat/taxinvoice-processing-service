@@ -83,7 +83,7 @@ class TaxInvoiceProcessingServiceTest {
         LineItem item = new LineItem(
             "Service 1",
             10,
-            Money.of(1000.00, "THB"),
+            Money.of(new BigDecimal("1000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -241,7 +241,7 @@ class TaxInvoiceProcessingServiceTest {
         LineItem item = new LineItem(
             "Service 1",
             10,
-            Money.of(1000.00, "THB"),
+            Money.of(new BigDecimal("1000.00"), "THB"),
             new BigDecimal("7.00")
         );
         validInvoice = ProcessedTaxInvoice.builder()

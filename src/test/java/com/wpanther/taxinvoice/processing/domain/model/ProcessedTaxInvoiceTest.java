@@ -35,7 +35,7 @@ class ProcessedTaxInvoiceTest {
         LineItem item1 = new LineItem(
             "Service 1",
             10,
-            Money.of(1000.00, "THB"),
+            Money.of(new BigDecimal("1000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -78,7 +78,7 @@ class ProcessedTaxInvoiceTest {
 
         // Then
         // 10 * 1000 = 10,000
-        assertEquals(Money.of(10000.00, "THB"), subtotal);
+        assertEquals(Money.of(new BigDecimal("10000.00"), "THB"), subtotal);
     }
 
     @Test
@@ -91,7 +91,7 @@ class ProcessedTaxInvoiceTest {
 
         // Then
         // 10,000 * 0.07 = 700
-        assertEquals(Money.of(700.00, "THB"), totalTax);
+        assertEquals(Money.of(new BigDecimal("700.00"), "THB"), totalTax);
     }
 
     @Test
@@ -104,7 +104,7 @@ class ProcessedTaxInvoiceTest {
 
         // Then
         // 10,000 + 700 = 10,700
-        assertEquals(Money.of(10700.00, "THB"), total);
+        assertEquals(Money.of(new BigDecimal("10700.00"), "THB"), total);
     }
 
     @Test
@@ -113,7 +113,7 @@ class ProcessedTaxInvoiceTest {
         LineItem item2 = new LineItem(
             "Service 2",
             5,
-            Money.of(2000.00, "THB"),
+            Money.of(new BigDecimal("2000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -128,11 +128,11 @@ class ProcessedTaxInvoiceTest {
 
         // Then
         // Subtotal: (10 * 1000) + (5 * 2000) = 20,000
-        assertEquals(Money.of(20000.00, "THB"), subtotal);
+        assertEquals(Money.of(new BigDecimal("20000.00"), "THB"), subtotal);
         // Tax: 20,000 * 0.07 = 1,400
-        assertEquals(Money.of(1400.00, "THB"), totalTax);
+        assertEquals(Money.of(new BigDecimal("1400.00"), "THB"), totalTax);
         // Total: 20,000 + 1,400 = 21,400
-        assertEquals(Money.of(21400.00, "THB"), total);
+        assertEquals(Money.of(new BigDecimal("21400.00"), "THB"), total);
     }
 
     @Test
@@ -299,7 +299,7 @@ class ProcessedTaxInvoiceTest {
         LineItem itemWithDifferentCurrency = new LineItem(
             "Service",
             10,
-            Money.of(1000.00, "USD"),  // Different currency
+            Money.of(new BigDecimal("1000.00"), "USD"),  // Different currency
             new BigDecimal("7.00")
         );
 
@@ -322,7 +322,7 @@ class ProcessedTaxInvoiceTest {
 
         // Then
         assertThrows(UnsupportedOperationException.class, () ->
-            items.add(new LineItem("New Item", 1, Money.of(100.00, "THB"), BigDecimal.ZERO))
+            items.add(new LineItem("New Item", 1, Money.of(new BigDecimal("100.00"), "THB"), BigDecimal.ZERO))
         );
     }
 

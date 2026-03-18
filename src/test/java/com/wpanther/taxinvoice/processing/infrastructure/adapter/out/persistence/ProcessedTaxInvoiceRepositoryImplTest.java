@@ -48,7 +48,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
         LineItem item = new LineItem(
             "Test Service",
             10,
-            Money.of(1000.00, "THB"),
+            Money.of(new BigDecimal("1000.00"), "THB"),
             new BigDecimal("7.00")
         );
 

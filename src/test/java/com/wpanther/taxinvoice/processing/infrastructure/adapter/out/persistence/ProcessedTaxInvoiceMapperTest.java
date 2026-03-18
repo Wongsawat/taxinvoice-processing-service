@@ -40,14 +40,14 @@ class ProcessedTaxInvoiceMapperTest {
         LineItem item1 = new LineItem(
             "Service 1",
             10,
-            Money.of(1000.00, "THB"),
+            Money.of(new BigDecimal("1000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
         LineItem item2 = new LineItem(
             "Service 2",
             5,
-            Money.of(2000.00, "THB"),
+            Money.of(new BigDecimal("2000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -212,7 +212,7 @@ class ProcessedTaxInvoiceMapperTest {
         LineItem item1 = reconstructed.getItems().get(0);
         assertEquals("Service 1", item1.description());
         assertEquals(10, item1.quantity());
-        assertEquals(Money.of(1000.00, "THB"), item1.unitPrice());
+        assertEquals(Money.of(new BigDecimal("1000.00"), "THB"), item1.unitPrice());
         assertEquals(new BigDecimal("7.00"), item1.taxRate());
 
         LineItem item2 = reconstructed.getItems().get(1);

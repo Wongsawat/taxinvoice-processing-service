@@ -16,7 +16,7 @@ class LineItemTest {
         // Given
         String description = "Professional Services";
         int quantity = 10;
-        Money unitPrice = Money.of(5000.00, "THB");
+        Money unitPrice = Money.of(new BigDecimal("5000.00"), "THB");
         BigDecimal taxRate = new BigDecimal("7.00");
 
         // When
@@ -36,7 +36,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Services",
             10,
-            Money.of(5000.00, "THB"),
+            Money.of(new BigDecimal("5000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -44,7 +44,7 @@ class LineItemTest {
         Money lineTotal = lineItem.getLineTotal();
 
         // Then
-        assertEquals(Money.of(50000.00, "THB"), lineTotal);
+        assertEquals(Money.of(new BigDecimal("50000.00"), "THB"), lineTotal);
     }
 
     @Test
@@ -53,7 +53,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Services",
             10,
-            Money.of(5000.00, "THB"),
+            Money.of(new BigDecimal("5000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -62,7 +62,7 @@ class LineItemTest {
 
         // Then
         // Tax: 50000 * 0.07 = 3500
-        assertEquals(Money.of(3500.00, "THB"), taxAmount);
+        assertEquals(Money.of(new BigDecimal("3500.00"), "THB"), taxAmount);
     }
 
     @Test
@@ -71,7 +71,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Services",
             10,
-            Money.of(5000.00, "THB"),
+            Money.of(new BigDecimal("5000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -80,7 +80,7 @@ class LineItemTest {
 
         // Then
         // Total: 50000 + 3500 = 53500
-        assertEquals(Money.of(53500.00, "THB"), totalWithTax);
+        assertEquals(Money.of(new BigDecimal("53500.00"), "THB"), totalWithTax);
     }
 
     @Test
@@ -89,7 +89,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Services",
             5,
-            Money.of(1000.00, "THB"),
+            Money.of(new BigDecimal("1000.00"), "THB"),
             BigDecimal.ZERO
         );
 
@@ -98,8 +98,8 @@ class LineItemTest {
         Money totalWithTax = lineItem.getTotalWithTax();
 
         // Then
-        assertEquals(Money.of(0.00, "THB"), taxAmount);
-        assertEquals(Money.of(5000.00, "THB"), totalWithTax);
+        assertEquals(Money.of(new BigDecimal("0.00"), "THB"), taxAmount);
+        assertEquals(Money.of(new BigDecimal("5000.00"), "THB"), totalWithTax);
     }
 
     @Test
@@ -108,7 +108,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Services",
             1,
-            Money.of(100.00, "THB"),
+            Money.of(new BigDecimal("100.00"), "THB"),
             new BigDecimal("100.00")
         );
 
@@ -116,14 +116,14 @@ class LineItemTest {
         Money taxAmount = lineItem.getTaxAmount();
 
         // Then
-        assertEquals(Money.of(100.00, "THB"), taxAmount);
+        assertEquals(Money.of(new BigDecimal("100.00"), "THB"), taxAmount);
     }
 
     @Test
     void testNullDescription() {
         // When/Then
         assertThrows(NullPointerException.class, () ->
-            new LineItem(null, 10, Money.of(100.00, "THB"), new BigDecimal("7.00"))
+            new LineItem(null, 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"))
         );
     }
 
@@ -131,11 +131,11 @@ class LineItemTest {
     void testBlankDescription() {
         // When/Then
         assertThrows(IllegalArgumentException.class, () ->
-            new LineItem("", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"))
+            new LineItem("", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"))
         );
 
         assertThrows(IllegalArgumentException.class, () ->
-            new LineItem("   ", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"))
+            new LineItem("   ", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"))
         );
     }
 
@@ -151,7 +151,7 @@ class LineItemTest {
     void testNullTaxRate() {
         // When/Then
         assertThrows(NullPointerException.class, () ->
-            new LineItem("Services", 10, Money.of(100.00, "THB"), null)
+            new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), null)
         );
     }
 
@@ -159,7 +159,7 @@ class LineItemTest {
     void testZeroQuantity() {
         // When/Then
         assertThrows(IllegalArgumentException.class, () ->
-            new LineItem("Services", 0, Money.of(100.00, "THB"), new BigDecimal("7.00"))
+            new LineItem("Services", 0, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"))
         );
     }
 
@@ -167,7 +167,7 @@ class LineItemTest {
     void testNegativeQuantity() {
         // When/Then
         assertThrows(IllegalArgumentException.class, () ->
-            new LineItem("Services", -5, Money.of(100.00, "THB"), new BigDecimal("7.00"))
+            new LineItem("Services", -5, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"))
         );
     }
 
@@ -175,7 +175,7 @@ class LineItemTest {
     void testNegativeTaxRate() {
         // When/Then
         assertThrows(IllegalArgumentException.class, () ->
-            new LineItem("Services", 10, Money.of(100.00, "THB"), new BigDecimal("-1.00"))
+            new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("-1.00"))
         );
     }
 
@@ -183,16 +183,16 @@ class LineItemTest {
     void testTaxRateAbove100() {
         // When/Then
         assertThrows(IllegalArgumentException.class, () ->
-            new LineItem("Services", 10, Money.of(100.00, "THB"), new BigDecimal("101.00"))
+            new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("101.00"))
         );
     }
 
     @Test
     void testEquality() {
         // Given
-        LineItem item1 = new LineItem("Services", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"));
-        LineItem item2 = new LineItem("Services", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"));
-        LineItem item3 = new LineItem("Products", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"));
+        LineItem item1 = new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"));
+        LineItem item2 = new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"));
+        LineItem item3 = new LineItem("Products", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"));
 
         // When/Then
         assertEquals(item1, item2);
@@ -202,8 +202,8 @@ class LineItemTest {
     @Test
     void testHashCode() {
         // Given
-        LineItem item1 = new LineItem("Services", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"));
-        LineItem item2 = new LineItem("Services", 10, Money.of(100.00, "THB"), new BigDecimal("7.00"));
+        LineItem item1 = new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"));
+        LineItem item2 = new LineItem("Services", 10, Money.of(new BigDecimal("100.00"), "THB"), new BigDecimal("7.00"));
 
         // When/Then
         assertEquals(item1.hashCode(), item2.hashCode());
@@ -215,7 +215,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Software License",
             1,
-            Money.of(10000.00, "THB"),
+            Money.of(new BigDecimal("10000.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -223,7 +223,7 @@ class LineItemTest {
         Money lineTotal = lineItem.getLineTotal();
 
         // Then
-        assertEquals(Money.of(10000.00, "THB"), lineTotal);
+        assertEquals(Money.of(new BigDecimal("10000.00"), "THB"), lineTotal);
     }
 
     @Test
@@ -232,7 +232,7 @@ class LineItemTest {
         LineItem lineItem = new LineItem(
             "Small Items",
             1000,
-            Money.of(5.00, "THB"),
+            Money.of(new BigDecimal("5.00"), "THB"),
             new BigDecimal("7.00")
         );
 
@@ -240,6 +240,6 @@ class LineItemTest {
         Money lineTotal = lineItem.getLineTotal();
 
         // Then
-        assertEquals(Money.of(5000.00, "THB"), lineTotal);
+        assertEquals(Money.of(new BigDecimal("5000.00"), "THB"), lineTotal);
     }
 }
