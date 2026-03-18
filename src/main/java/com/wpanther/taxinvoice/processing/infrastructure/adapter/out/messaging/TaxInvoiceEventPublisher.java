@@ -4,7 +4,6 @@ import com.wpanther.taxinvoice.processing.application.dto.event.TaxInvoiceProces
 import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -18,15 +17,21 @@ import java.util.Map;
  * Implements TaxInvoiceEventPublishingPort to adhere to hexagonal architecture.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
 
     private final OutboxService outboxService;
     private final HeaderSerializer headerSerializer;
+    private final String taxinvoiceProcessedTopic;
 
-    @Value("${app.kafka.topics.taxinvoice-processed}")
-    private String taxinvoiceProcessedTopic;
+    public TaxInvoiceEventPublisher(
+            OutboxService outboxService,
+            HeaderSerializer headerSerializer,
+            @Value("${app.kafka.topics.taxinvoice-processed}") String taxinvoiceProcessedTopic) {
+        this.outboxService = outboxService;
+        this.headerSerializer = headerSerializer;
+        this.taxinvoiceProcessedTopic = taxinvoiceProcessedTopic;
+    }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
