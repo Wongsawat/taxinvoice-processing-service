@@ -54,6 +54,10 @@ camel:
 
 # Application-specific configuration
 app:
+  outbox:
+    cleanup:
+      retention-days: 7
+      cron: "0 0 2 * * *"
   camel:
     retry:
       max-redeliveries: 3
