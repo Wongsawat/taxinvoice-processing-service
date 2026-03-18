@@ -51,6 +51,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     private final Counter processIdempotentCounter;
     private final Counter processConcurrentDuplicateCounter;
     private final Counter compensateSuccessCounter;
+    private final Counter compensateIdempotentCounter;
     private final Counter compensateFailureCounter;
     private final Timer processingTimer;
 
@@ -86,6 +87,9 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             .register(meterRegistry);
         this.compensateSuccessCounter = Counter.builder("taxinvoice.compensation.success")
             .description("Number of successful compensations")
+            .register(meterRegistry);
+        this.compensateIdempotentCounter = Counter.builder("taxinvoice.compensation.idempotent")
+            .description("Number of duplicate compensation commands received for an already-deleted invoice")
             .register(meterRegistry);
         this.compensateFailureCounter = Counter.builder("taxinvoice.compensation.failure")
             .description("Number of failed compensation attempts")
@@ -219,7 +223,11 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                 invoiceRepository.deleteById(existing.get().getId());
                 log.info("Deleted tax invoice for document: {}", documentId);
             } else {
-                log.warn("Tax invoice not found for compensation: {}", documentId);
+                // Invoice already absent — duplicate compensation command (orchestrator retry or bug).
+                compensateIdempotentCounter.increment();
+                log.warn("Tax invoice not found for compensation of document {} saga {} — "
+                    + "treating as idempotent duplicate (already compensated or never processed)",
+                    documentId, sagaId);
             }
 
             sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
