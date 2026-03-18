@@ -305,7 +305,38 @@ class ProcessedTaxInvoiceMapperTest {
         assertNull(sellerEntity.getStreetAddress());
         assertNull(sellerEntity.getCity());
         assertNull(sellerEntity.getPostalCode());
-        assertEquals("UNKNOWN", sellerEntity.getCountry());
+        assertNull(sellerEntity.getCountry());
+    }
+
+    @Test
+    void testNullAddressRoundTrip() {
+        // Given — a party with no address (optional per Thai e-Tax XSD)
+        Party sellerWithoutAddress = Party.of(
+            "Seller",
+            TaxIdentifier.of("1234567890"),
+            null
+        );
+
+        ProcessedTaxInvoice invoice = ProcessedTaxInvoice.builder()
+            .id(TaxInvoiceId.generate())
+            .sourceInvoiceId("intake-rt")
+            .invoiceNumber("INV-RT-001")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .seller(sellerWithoutAddress)
+            .buyer(domainInvoice.getBuyer())
+            .items(domainInvoice.getItems())
+            .currency("THB")
+            .originalXml("<xml/>")
+            .build();
+
+        // When — round-trip through entity
+        ProcessedTaxInvoiceEntity entity = mapper.toEntity(invoice);
+        ProcessedTaxInvoice reconstructed = mapper.toDomain(entity);
+
+        // Then — null address must survive the round-trip unchanged
+        assertNull(reconstructed.getSeller().address(),
+            "Party with null address should remain null after persist/load round-trip");
     }
 
     @Test

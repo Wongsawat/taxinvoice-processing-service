@@ -138,7 +138,7 @@ public class ProcessedTaxInvoiceMapper {
             .streetAddress(domain.address() != null ? domain.address().streetAddress() : null)
             .city(domain.address() != null ? domain.address().city() : null)
             .postalCode(domain.address() != null ? domain.address().postalCode() : null)
-            .country(domain.address() != null ? domain.address().country() : "UNKNOWN")
+            .country(domain.address() != null ? domain.address().country() : null)
             .email(domain.email())
             .build();
     }
@@ -148,12 +148,12 @@ public class ProcessedTaxInvoiceMapper {
             ? TaxIdentifier.of(entity.getTaxId(), entity.getTaxIdScheme())
             : null;
 
-        Address address = Address.of(
-            entity.getStreetAddress(),
-            entity.getCity(),
-            entity.getPostalCode(),
-            entity.getCountry()
-        );
+        // country is NULL when the party had no postal address (optional per Thai e-Tax XSD).
+        // Reconstruct a null address to preserve the domain model's null semantics.
+        Address address = entity.getCountry() != null
+            ? Address.of(entity.getStreetAddress(), entity.getCity(),
+                         entity.getPostalCode(), entity.getCountry())
+            : null;
 
         return Party.of(entity.getName(), taxId, address, entity.getEmail());
     }
