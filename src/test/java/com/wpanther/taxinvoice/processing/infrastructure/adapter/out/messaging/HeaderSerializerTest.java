@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -34,12 +35,10 @@ class HeaderSerializerTest {
     }
 
     @Test
-    void toJson_whenJsonProcessingException_returnsEmptyJson() throws JsonProcessingException {
+    void toJson_whenJsonProcessingException_throwsIllegalStateException() throws JsonProcessingException {
         Map<String, String> headers = Map.of("key", "value");
         when(objectMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("error") {});
 
-        String result = headerSerializer.toJson(headers);
-
-        assertEquals("{}", result);
+        assertThrows(IllegalStateException.class, () -> headerSerializer.toJson(headers));
     }
 }
