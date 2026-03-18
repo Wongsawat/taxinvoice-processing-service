@@ -19,12 +19,16 @@ import java.util.UUID;
  * JPA Entity for ProcessedTaxInvoice aggregate
  */
 @Entity
-@Table(name = "processed_tax_invoices", indexes = {
-    @Index(name = "idx_tax_invoice_number", columnList = "invoice_number"),
-    @Index(name = "idx_tax_source_invoice_id", columnList = "source_invoice_id"),
-    @Index(name = "idx_tax_status", columnList = "status"),
-    @Index(name = "idx_tax_issue_date", columnList = "issue_date")
-})
+@Table(name = "processed_tax_invoices",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "idx_tax_invoice_number_unique", columnNames = "invoice_number")
+    },
+    indexes = {
+        @Index(name = "idx_tax_source_invoice_id", columnList = "source_invoice_id"),
+        @Index(name = "idx_tax_status", columnList = "status"),
+        @Index(name = "idx_tax_issue_date", columnList = "issue_date")
+    }
+)
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -38,7 +42,7 @@ public class ProcessedTaxInvoiceEntity {
     @Column(name = "source_invoice_id", nullable = false, length = 100)
     private String sourceInvoiceId;
 
-    @Column(name = "invoice_number", nullable = false, length = 50)
+    @Column(name = "invoice_number", nullable = false, unique = true, length = 50)
     private String invoiceNumber;
 
     @Column(name = "issue_date", nullable = false)
