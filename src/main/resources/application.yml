@@ -54,8 +54,17 @@ camel:
 
 # Application-specific configuration
 app:
+  camel:
+    retry:
+      max-redeliveries: 3
+      redelivery-delay-ms: 1000
+      backoff-multiplier: 2.0
+      max-redelivery-delay-ms: 10000
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumers:
+      max-poll-records: 100
+      count: 3
     topics:
       taxinvoice-processed: taxinvoice.processed
       dlq: taxinvoice.processing.dlq

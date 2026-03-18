@@ -16,12 +16,6 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class SagaRouteConfig extends RouteBuilder {
 
-    private static final int MAX_REDELIVERIES = 3;
-    private static final long REDELIVERY_DELAY_MS = 1000;
-    private static final double BACKOFF_MULTIPLIER = 2;
-    private static final long MAX_REDELIVERY_DELAY_MS = 10000;
-    private static final int MAX_POLL_RECORDS = 100;
-    private static final int CONSUMERS_COUNT = 3;
     private static final String GROUP_ID = "taxinvoice-processing-service";
 
     private final SagaCommandHandler sagaCommandHandler;
@@ -38,6 +32,24 @@ public class SagaRouteConfig extends RouteBuilder {
     @Value("${app.kafka.topics.dlq:taxinvoice.processing.dlq}")
     private String dlqTopic;
 
+    @Value("${app.camel.retry.max-redeliveries:3}")
+    private int maxRedeliveries;
+
+    @Value("${app.camel.retry.redelivery-delay-ms:1000}")
+    private long redeliveryDelayMs;
+
+    @Value("${app.camel.retry.backoff-multiplier:2.0}")
+    private double backoffMultiplier;
+
+    @Value("${app.camel.retry.max-redelivery-delay-ms:10000}")
+    private long maxRedeliveryDelayMs;
+
+    @Value("${app.kafka.consumers.max-poll-records:100}")
+    private int maxPollRecords;
+
+    @Value("${app.kafka.consumers.count:3}")
+    private int consumersCount;
+
     public SagaRouteConfig(SagaCommandHandler sagaCommandHandler) {
         this.sagaCommandHandler = sagaCommandHandler;
     }
@@ -51,8 +63,8 @@ public class SagaRouteConfig extends RouteBuilder {
                 + "&autoOffsetReset=earliest"
                 + "&autoCommitEnable=false"
                 + "&breakOnFirstError=true"
-                + "&maxPollRecords=" + MAX_POLL_RECORDS
-                + "&consumersCount=" + CONSUMERS_COUNT;
+                + "&maxPollRecords=" + maxPollRecords
+                + "&consumersCount=" + consumersCount;
     }
 
     @Override
@@ -60,11 +72,11 @@ public class SagaRouteConfig extends RouteBuilder {
 
         // Global error handler - Dead Letter Channel with retries
         errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=RAW(" + kafkaBrokers + ")")
-            .maximumRedeliveries(MAX_REDELIVERIES)
-            .redeliveryDelay(REDELIVERY_DELAY_MS)
+            .maximumRedeliveries(maxRedeliveries)
+            .redeliveryDelay(redeliveryDelayMs)
             .useExponentialBackOff()
-            .backOffMultiplier(BACKOFF_MULTIPLIER)
-            .maximumRedeliveryDelay(MAX_REDELIVERY_DELAY_MS)
+            .backOffMultiplier(backoffMultiplier)
+            .maximumRedeliveryDelay(maxRedeliveryDelayMs)
             .logExhausted(true)
             .logStackTrace(true));
 
