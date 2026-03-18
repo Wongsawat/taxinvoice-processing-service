@@ -20,7 +20,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -223,78 +222,6 @@ class TaxInvoiceProcessingServiceTest {
         verify(parserService).parse("<xml>test</xml>", "intake-123");
         verify(invoiceRepository, times(2)).save(any(ProcessedTaxInvoice.class));
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
-    }
-
-    @Test
-    void testFindByIdValid() {
-        // Given
-        TaxInvoiceId id = TaxInvoiceId.generate();
-        when(invoiceRepository.findById(any(TaxInvoiceId.class))).thenReturn(Optional.of(validInvoice));
-
-        // When
-        Optional<ProcessedTaxInvoice> result = service.findById(id.toString());
-
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(validInvoice, result.get());
-        verify(invoiceRepository).findById(any(TaxInvoiceId.class));
-    }
-
-    @Test
-    void testFindByIdInvalidFormat() {
-        // Given
-        String invalidId = "not-a-uuid";
-
-        // When
-        Optional<ProcessedTaxInvoice> result = service.findById(invalidId);
-
-        // Then
-        assertFalse(result.isPresent());
-        verify(invoiceRepository, never()).findById(any(TaxInvoiceId.class));
-    }
-
-    @Test
-    void testFindByIdNotFound() {
-        // Given
-        TaxInvoiceId id = TaxInvoiceId.generate();
-        when(invoiceRepository.findById(any(TaxInvoiceId.class))).thenReturn(Optional.empty());
-
-        // When
-        Optional<ProcessedTaxInvoice> result = service.findById(id.toString());
-
-        // Then
-        assertFalse(result.isPresent());
-        verify(invoiceRepository).findById(any(TaxInvoiceId.class));
-    }
-
-    @Test
-    void testFindByStatus() {
-        // Given
-        ProcessingStatus status = ProcessingStatus.COMPLETED;
-        List<ProcessedTaxInvoice> invoices = List.of(validInvoice);
-        when(invoiceRepository.findByStatus(status)).thenReturn(invoices);
-
-        // When
-        List<ProcessedTaxInvoice> result = service.findByStatus(status);
-
-        // Then
-        assertEquals(1, result.size());
-        assertEquals(validInvoice, result.get(0));
-        verify(invoiceRepository).findByStatus(status);
-    }
-
-    @Test
-    void testFindByStatusEmpty() {
-        // Given
-        ProcessingStatus status = ProcessingStatus.PROCESSING;
-        when(invoiceRepository.findByStatus(status)).thenReturn(List.of());
-
-        // When
-        List<ProcessedTaxInvoice> result = service.findByStatus(status);
-
-        // Then
-        assertTrue(result.isEmpty());
-        verify(invoiceRepository).findByStatus(status);
     }
 
     @Test

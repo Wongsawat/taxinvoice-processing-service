@@ -8,7 +8,6 @@ import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPu
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
-import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
 import io.micrometer.core.instrument.Counter;
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -239,18 +237,4 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         }
     }
 
-    @Transactional(readOnly = true)
-    Optional<ProcessedTaxInvoice> findById(String id) {
-        try {
-            return invoiceRepository.findById(TaxInvoiceId.from(id));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid tax invoice ID format: {}", id);
-            return Optional.empty();
-        }
-    }
-
-    @Transactional(readOnly = true)
-    List<ProcessedTaxInvoice> findByStatus(ProcessingStatus status) {
-        return invoiceRepository.findByStatus(status);
-    }
 }
