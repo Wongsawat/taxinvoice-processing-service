@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.xml.sax.InputSource;
 
 import javax.xml.XMLConstants;
+import javax.xml.datatype.DatatypeConstants;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
@@ -40,6 +41,7 @@ import javax.xml.transform.sax.SAXSource;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -51,6 +53,8 @@ import java.util.Optional;
 @Slf4j
 @Service
 public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
+
+    private static final ZoneId TH_ZONE = ZoneId.of("Asia/Bangkok");
 
     private final JAXBContext jaxbContext;
     private final SAXParserFactory saxParserFactory;
@@ -458,10 +462,18 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
     }
 
     /**
-     * Convert XMLGregorianCalendar to LocalDate.
-     * Uses toGregorianCalendar() for robust handling of undefined fields.
+     * Convert XMLGregorianCalendar to LocalDate using Thai timezone (UTC+7).
+     * When the XML omits the timezone offset (DatatypeConstants.FIELD_UNDEFINED),
+     * the timestamp is interpreted as Asia/Bangkok time — matching the Thai e-Tax standard.
+     * Without this, a JVM running at UTC would misparse a late-evening Thai datetime
+     * (e.g. 2025-01-01T23:30:00 without offset) as the previous calendar day.
      */
     private LocalDate convertXMLGregorianCalendarToLocalDate(XMLGregorianCalendar calendar) {
-        return calendar.toGregorianCalendar().toZonedDateTime().toLocalDate();
+        ZoneId zone = (calendar.getTimezone() == DatatypeConstants.FIELD_UNDEFINED)
+            ? TH_ZONE
+            : calendar.toGregorianCalendar().getTimeZone().toZoneId();
+        return calendar.toGregorianCalendar().toZonedDateTime()
+            .withZoneSameInstant(zone)
+            .toLocalDate();
     }
 }

@@ -12,6 +12,7 @@ import org.mockito.MockedStatic;
 import javax.xml.transform.sax.SAXSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -1570,5 +1571,67 @@ class TaxInvoiceParserServiceImplTest {
             </ram:SellerTradeParty>
             """;
         return buildXml(standardExchangedDocument(), standardSupplyChain(sellerNoId));
+    }
+
+    // -----------------------------------------------------------------------
+    // Timezone-safety tests for convertXMLGregorianCalendarToLocalDate
+    // -----------------------------------------------------------------------
+
+    /**
+     * Regression test for the JVM-timezone bug.
+     *
+     * When a Thai e-Tax XML omits the timezone offset, the naive timestamp must be
+     * treated as Asia/Bangkok time. With a UTC JVM (Docker default), the old code
+     * interpreted the naive value as UTC; a Bangkok-midnight event like 2025-01-01
+     * stored as "2024-12-31T17:30:00" (no TZ) would then be mis-dated as 2024-12-31
+     * instead of the correct Thai date 2025-01-01.
+     *
+     * This test pins the JVM to UTC to reproduce the exact Docker scenario.
+     */
+    @Test
+    void testParseDateTimezone_naiveTimestamp_utcJvm_yieldsCorrectThaiDate()
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        TimeZone savedDefault = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+
+            // 2024-12-31T17:30:00 naive = UTC 17:30 = Bangkok 2025-01-01T00:30:00+07:00
+            // Old code (JVM=UTC) returned 2024-12-31 — a compliance-breaking off-by-one.
+            String xml = getTaxInvoiceXmlWithIssueDateTime("2024-12-31T17:30:00");
+
+            ProcessedTaxInvoice invoice = parserService.parse(xml, "tz-test-naive-utc");
+
+            assertEquals(LocalDate.of(2025, 1, 1), invoice.getIssueDate(),
+                "Naive UTC datetime 2024-12-31T17:30:00 represents Bangkok 2025-01-01 and must be stored as such");
+        } finally {
+            TimeZone.setDefault(savedDefault);
+        }
+    }
+
+    /**
+     * Explicit Bangkok offset: date is read directly from the given +07:00 timezone.
+     * No conversion needed — the explicit offset is authoritative.
+     */
+    @Test
+    void testParseDateTimezone_explicitBangkokOffset_yieldsCorrectDate()
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // 2025-01-01T23:30:00+07:00 — explicit Thai timezone, date must be 2025-01-01
+        String xml = getTaxInvoiceXmlWithIssueDateTime("2025-01-01T23:30:00+07:00");
+
+        ProcessedTaxInvoice invoice = parserService.parse(xml, "tz-test-explicit-th");
+
+        assertEquals(LocalDate.of(2025, 1, 1), invoice.getIssueDate(),
+            "Explicit +07:00 timestamp at 23:30 must yield 2025-01-01");
+    }
+
+    private String getTaxInvoiceXmlWithIssueDateTime(String dateTime) {
+        String exchangedDocument = """
+          <rsm:ExchangedDocument>
+            <ram:ID>TV-TZ-TEST</ram:ID>
+            <ram:IssueDateTime>""" + dateTime + """
+</ram:IssueDateTime>
+          </rsm:ExchangedDocument>
+          """;
+        return buildXml(exchangedDocument, standardSupplyChain(null));
     }
 }
