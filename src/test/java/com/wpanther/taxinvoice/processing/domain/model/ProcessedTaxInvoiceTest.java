@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -170,6 +171,39 @@ class ProcessedTaxInvoiceTest {
         // Then
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
         assertNotNull(invoice.getCompletedAt());
+    }
+
+    @Test
+    void testCreatedAt_defaultsToUtcWhenNotProvided() {
+        // createdAt fallback uses LocalDateTime.now(ZoneOffset.UTC) — verify the
+        // returned value falls within the UTC window bracketing the build() call.
+        LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC);
+        ProcessedTaxInvoice invoice = validInvoiceBuilder.build();
+        LocalDateTime after = LocalDateTime.now(ZoneOffset.UTC);
+
+        assertNotNull(invoice.getCreatedAt());
+        assertFalse(invoice.getCreatedAt().isBefore(before),
+            "createdAt must not be before the test started (should be UTC)");
+        assertFalse(invoice.getCreatedAt().isAfter(after),
+            "createdAt must not be after the test ended (should be UTC)");
+    }
+
+    @Test
+    void testMarkCompleted_completedAtIsUtc() {
+        // completedAt uses LocalDateTime.now(ZoneOffset.UTC) — verify the value falls
+        // within the UTC window bracketing the markCompleted() call.
+        ProcessedTaxInvoice invoice = validInvoiceBuilder.build();
+        invoice.startProcessing();
+
+        LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC);
+        invoice.markCompleted();
+        LocalDateTime after = LocalDateTime.now(ZoneOffset.UTC);
+
+        assertNotNull(invoice.getCompletedAt());
+        assertFalse(invoice.getCompletedAt().isBefore(before),
+            "completedAt must not be before markCompleted() was called (should be UTC)");
+        assertFalse(invoice.getCompletedAt().isAfter(after),
+            "completedAt must not be after markCompleted() returned (should be UTC)");
     }
 
     @Test

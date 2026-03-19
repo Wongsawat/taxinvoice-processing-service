@@ -175,18 +175,32 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     }
 
     @Test
-    void testUpdateInvoice() {
-        // Given — honour the INSERT/UPDATE contract: first save must be PROCESSING
+    void testJpaSave_mergesExistingEntityByPrimaryKey() {
+        // When save() is called twice with PROCESSING status it takes the INSERT branch
+        // (jpaRepository.save) both times. JPA recognises the existing PK and performs
+        // a merge (UPDATE), not a second INSERT. This exercises the JPA merge path,
+        // NOT the updateStatusFields() path — that path requires a non-PROCESSING status.
         testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
 
-        // When — second save is an UPDATE (status is already PROCESSING)
-        ProcessedTaxInvoice updated = repository.save(saved);
-        Optional<ProcessedTaxInvoice> found = repository.findById(updated.getId());
+        ProcessedTaxInvoice merged = repository.save(saved);
+        Optional<ProcessedTaxInvoice> found = repository.findById(merged.getId());
 
-        // Then
         assertTrue(found.isPresent());
         assertEquals(ProcessingStatus.PROCESSING, found.get().getStatus());
+    }
+
+    @Test
+    void testSaveContractViolation_throwsIllegalStateExceptionOnUnpersistedNonProcessingStatus() {
+        // Given: invoice has status COMPLETED but was never persisted in PROCESSING state
+        testInvoice.startProcessing();
+        testInvoice.markCompleted(); // status = COMPLETED, no INSERT has happened
+
+        // When/Then: save() detects no row exists and throws rather than silently
+        // issuing a zero-row UPDATE that would drop the invoice without an error
+        assertThrows(IllegalStateException.class, () -> repository.save(testInvoice),
+            "save() must throw IllegalStateException when called with non-PROCESSING " +
+            "status for an invoice that was never persisted");
     }
 
     @Test
@@ -294,8 +308,10 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     private JpaProcessedTaxInvoiceRepository jpaRepository;
 
     @Test
-    void testUpdateStatusFields_incrementsVersion() {
-        // Given: PROCESSING is the first persisted status; INSERT gives version = 0
+    void testUpdateStatusFields_incrementsVersionAndSetsUpdatedAt() {
+        // Given: PROCESSING is the first persisted status; INSERT gives version = 0.
+        // Note: in Hibernate 6, @UpdateTimestamp fires on UPDATE only, so updatedAt
+        // is null after INSERT. The important thing is that updateStatusFields() sets it.
         testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         UUID id = saved.getId().value();
@@ -305,7 +321,15 @@ class ProcessedTaxInvoiceRepositoryImplTest {
         // When: status update (PROCESSING → COMPLETED) via updateStatusFields
         saved.markCompleted();
         repository.save(saved);
-        assertEquals(1L, jpaRepository.findById(id).orElseThrow().getVersion(),
+
+        // Then: version incremented and updatedAt set by i.updatedAt = CURRENT_TIMESTAMP
+        // in the JPQL SET clause — verifies the @Modifying bypass of @UpdateTimestamp
+        // is compensated for explicitly in the query.
+        ProcessedTaxInvoiceEntity afterUpdate = jpaRepository.findById(id).orElseThrow();
+        assertEquals(1L, afterUpdate.getVersion(),
             "Version must be 1 after updateStatusFields call");
+        assertNotNull(afterUpdate.getUpdatedAt(),
+            "updatedAt must be set by updateStatusFields() JPQL — " +
+            "verifies i.updatedAt = CURRENT_TIMESTAMP is present in the SET clause");
     }
 }
