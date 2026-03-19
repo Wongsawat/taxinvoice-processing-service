@@ -1,7 +1,8 @@
 package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence.outbox;
 
 import com.wpanther.saga.domain.outbox.OutboxEventRepository;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,16 +27,27 @@ import java.time.temporal.ChronoUnit;
  *       published events (default: 7)</li>
  *   <li>{@code app.outbox.cleanup.cron} — when to run (default: 02:00 daily)</li>
  * </ul>
+ *
+ * <p>Failures increment {@code outbox.cleanup.failure} so alerting can detect
+ * when the table is no longer being pruned before it grows unbounded.
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class OutboxCleanupScheduler {
 
     private final OutboxEventRepository outboxEventRepository;
+    private final Counter cleanupFailureCounter;
 
     @Value("${app.outbox.cleanup.retention-days:7}")
     private int retentionDays;
+
+    public OutboxCleanupScheduler(OutboxEventRepository outboxEventRepository,
+                                  MeterRegistry meterRegistry) {
+        this.outboxEventRepository = outboxEventRepository;
+        this.cleanupFailureCounter = Counter.builder("outbox.cleanup.failure")
+            .description("Number of times the outbox cleanup job failed; sustained non-zero means the table may grow unbounded")
+            .register(meterRegistry);
+    }
 
     @Scheduled(cron = "${app.outbox.cleanup.cron:0 0 2 * * *}")
     public void cleanPublishedEvents() {
@@ -44,6 +56,7 @@ public class OutboxCleanupScheduler {
             int deleted = outboxEventRepository.deletePublishedBefore(cutoff);
             log.info("Outbox cleanup: deleted {} published events older than {} days", deleted, retentionDays);
         } catch (Exception e) {
+            cleanupFailureCounter.increment();
             log.error("Outbox cleanup failed: {}", e.toString());
         }
     }
