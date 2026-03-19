@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.SQLException;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -118,11 +119,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             // (two threads inserting the same document concurrently). Any other unique constraint
             // violation (e.g. duplicate invoice_number from a different document) is a data error
             // and must fail immediately without a REQUIRES_NEW re-check.
-            String causeMsg = e.getMostSpecificCause().getMessage();
-            boolean isSourceIdViolation = causeMsg != null
-                    && causeMsg.contains("uq_processed_tax_invoices_source_invoice_id");
-
-            if (!isSourceIdViolation) {
+            if (!isSourceInvoiceIdViolation(e)) {
                 processFailureCounter.increment();
                 log.error("Duplicate key violation on non-idempotent constraint for document {}, saga {}: {}",
                         documentId, sagaId, e.toString());
@@ -134,7 +131,9 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
 
             // Race-condition duplicate insert on source_invoice_id unique constraint.
             // Spring translates both PostgreSQL error 23505 and H2 unique index violations
-            // to DuplicateKeyException, so this catch is DB-dialect-agnostic.
+            // to DuplicateKeyException. isSourceInvoiceIdViolation() additionally gates
+            // on SQLState "23505" (ANSI unique_violation) and the constraint name to
+            // distinguish this path from other unique violations.
             // The outer transaction is ROLLBACK_ONLY; re-check in a fresh REQUIRES_NEW
             // transaction so we can reply SUCCESS if a concurrent thread already committed
             // the document — preventing the orchestrator from compensating committed work.
@@ -301,6 +300,47 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             throw new CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException(
                     "Compensation failed for document " + documentId, e);
         }
+    }
+
+    /**
+     * Returns {@code true} only when the exception is specifically a unique_violation
+     * on the {@code uq_processed_tax_invoices_source_invoice_id} constraint — the
+     * sole case that indicates a concurrent insert of the same document rather than
+     * a genuine data error.
+     *
+     * <p>Detection strategy (two independent guards, both must match):
+     * <ol>
+     *   <li><b>SQLState "23505"</b> — the ANSI / PostgreSQL / H2 code for
+     *       {@code unique_violation}.  This is stable across DB versions and
+     *       drivers and filters out unrelated {@code DataIntegrityViolationException}
+     *       subclasses that Spring may also wrap as {@code DuplicateKeyException}.</li>
+     *   <li><b>Constraint name in the message</b> — narrows the match to
+     *       <em>this specific</em> constraint so that a duplicate
+     *       {@code invoice_number} (a different unique index) is not treated as an
+     *       idempotent race condition.  The constraint name is set by Flyway migration
+     *       V1 and must stay in sync with the value below if ever renamed.</li>
+     * </ol>
+     *
+     * <p><b>Dialect note</b>: PostgreSQL formats the constraint name inside the
+     * detail message ("Key (source_invoice_id)=(...) already exists"); H2 formats it
+     * differently but still includes the index name.  Both dialects emit SQLState
+     * "23505" for unique violations.  If the constraint is renamed in a future
+     * migration this method must be updated to match.
+     */
+    private static boolean isSourceInvoiceIdViolation(DuplicateKeyException e) {
+        Throwable cause = e.getMostSpecificCause();
+        String msg = cause.getMessage();
+        if (msg == null || !msg.contains("uq_processed_tax_invoices_source_invoice_id")) {
+            return false;
+        }
+        // Walk the cause chain for a SQLException carrying SQLState "23505".
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof SQLException sqlEx && "23505".equals(sqlEx.getSQLState())) {
+                return true;
+            }
+        }
+        // No SQLException with SQLState 23505 found — treat as non-race-condition violation.
+        return false;
     }
 
 }

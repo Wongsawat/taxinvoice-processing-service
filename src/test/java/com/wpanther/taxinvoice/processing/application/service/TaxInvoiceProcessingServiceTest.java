@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -320,14 +321,19 @@ class TaxInvoiceProcessingServiceTest {
 
     @Test
     void testProcessInvoiceForSagaDataIntegrityViolationPropagates() throws Exception {
-        // Given - simulate race condition: idempotency check passes but insert conflicts.
-        // Uses DuplicateKeyException (Spring's dialect-agnostic subclass) — works with both
-        // PostgreSQL (error 23505) and H2 (unique index violation).
+        // Given - simulate the "ghost duplicate" scenario: idempotency check passes, insert
+        // conflicts on uq_processed_tax_invoices_source_invoice_id, but the REQUIRES_NEW
+        // re-check finds no record (the winning thread rolled back or never committed).
+        // The exception must carry a SQLException with SQLState "23505" (ANSI unique_violation)
+        // matching what the PostgreSQL JDBC driver wraps inside DuplicateKeyException.
+        SQLException sqlCause = new SQLException(
+            "ERROR: duplicate key value violates unique constraint" +
+            " \"uq_processed_tax_invoices_source_invoice_id\"", "23505");
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"uq_processed_tax_invoices_source_invoice_id\""));
+            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
 
         // When / Then - exception propagates (no silent swallowing), with original cause preserved
         ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
@@ -347,15 +353,20 @@ class TaxInvoiceProcessingServiceTest {
 
     @Test
     void testProcessInvoiceForSagaRaceConditionResolvesAsSuccess() throws Exception {
-        // Given - race condition: idempotency check passes, insert conflicts, but on
-        // re-check the concurrent thread's record is already in the database.
+        // Given - race condition: idempotency check passes, insert conflicts on
+        // uq_processed_tax_invoices_source_invoice_id, and the REQUIRES_NEW re-check
+        // finds the document already committed by the concurrent thread → publishSuccess.
+        // SQLException with SQLState "23505" is required by isSourceInvoiceIdViolation().
+        SQLException sqlCause = new SQLException(
+            "ERROR: duplicate key value violates unique constraint" +
+            " \"uq_processed_tax_invoices_source_invoice_id\"", "23505");
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString()))
             .thenReturn(Optional.empty())          // 1st call: idempotency check — no record yet
             .thenReturn(Optional.of(validInvoice)); // 2nd call: re-check — concurrent insert committed
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"uq_processed_tax_invoices_source_invoice_id\""));
+            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
 
         // When / Then — exception still propagates (prevents Spring UnexpectedRollbackException)
         ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
