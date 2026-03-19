@@ -56,6 +56,10 @@ camel:
 app:
   parsing:
     timeout-seconds: 10  # Maximum wall-clock time allowed for XML unmarshalling per message
+  tax-invoice:
+    default-due-date-days: 30  # Days added to issue date when XML omits a due date.
+                                # Thai RD submission deadline is the 15th of the following month,
+                                # so operators may set this to a shorter value in production.
   outbox:
     cleanup:
       retention-days: 7

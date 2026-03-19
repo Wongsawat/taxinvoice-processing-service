@@ -1590,6 +1590,21 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     @Test
+    void parse_whenDueDateAbsentAndCustomDefaultConfigured_usesConfiguredValue()
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Construct a service with a 15-day default (simulating RD submission-deadline config)
+        TaxInvoiceParserServiceImpl service =
+            new TaxInvoiceParserServiceImpl(10, TimeUnit.SECONDS, 15);
+
+        ProcessedTaxInvoice invoice = service.parse(getTaxInvoiceXmlWithoutDueDate(), "due-date-config-test");
+
+        // issueDate is 2025-01-15; with a 15-day default the due date must be 2025-01-30
+        assertEquals(LocalDate.of(2025, 1, 15), invoice.getIssueDate());
+        assertEquals(LocalDate.of(2025, 1, 30), invoice.getDueDate(),
+            "Due date must be issue date + configured defaultDueDateDays (15), not the hardcoded 30");
+    }
+
+    @Test
     void parse_whenXmlExceedsMaxSize_throwsParsingException() {
         // Build a payload that exceeds the 500 KB limit
         String padding = "x".repeat(TaxInvoiceParserServiceImpl.MAX_XML_BYTES + 1);

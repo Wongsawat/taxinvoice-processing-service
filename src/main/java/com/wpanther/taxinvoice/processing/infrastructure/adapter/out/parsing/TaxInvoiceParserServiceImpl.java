@@ -84,6 +84,15 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
     private final long parseTimeoutMs;
 
     /**
+     * Number of days added to the issue date when the XML omits a due date.
+     * Per the Thai Revenue Department's e-Tax submission rules, invoices must be
+     * submitted by the 15th of the month following issuance, so operators may wish
+     * to set this to a shorter value (e.g. 15) in production.
+     * Configured via {@code app.tax-invoice.default-due-date-days} (default 30).
+     */
+    private final int defaultDueDateDays;
+
+    /**
      * Dedicated virtual-thread executor for timed JAXB unmarshal operations.
      * Virtual threads (Java 21) are cheap, so each parse call gets its own thread
      * without consuming platform threads from the Camel consumer pool.
@@ -93,34 +102,43 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
     // ---- Constructors -------------------------------------------------------
 
     /**
-     * Production constructor — Spring resolves {@code app.parsing.timeout-seconds}
-     * (default 10) and injects it here.
+     * Production constructor — Spring resolves both configurable values and injects them.
      */
     @org.springframework.beans.factory.annotation.Autowired
     public TaxInvoiceParserServiceImpl(
-            @Value("${app.parsing.timeout-seconds:10}") int parseTimeoutSeconds) {
-        this(TimeUnit.SECONDS.toMillis(parseTimeoutSeconds));
+            @Value("${app.parsing.timeout-seconds:10}") int parseTimeoutSeconds,
+            @Value("${app.tax-invoice.default-due-date-days:30}") int defaultDueDateDays) {
+        this(TimeUnit.SECONDS.toMillis(parseTimeoutSeconds), defaultDueDateDays);
     }
 
     /**
      * Package-private constructor for unit tests that need fine-grained timeout control
-     * (e.g. 100 ms instead of 10 s) without a Spring context.
+     * (e.g. 100 ms instead of 10 s) without a Spring context.  Uses the default 30-day
+     * due-date fallback.
      */
     TaxInvoiceParserServiceImpl(long timeout, TimeUnit unit) {
-        this(unit.toMillis(timeout));
+        this(unit.toMillis(timeout), 30);
+    }
+
+    /**
+     * Package-private constructor for unit tests that need both a custom timeout
+     * and a custom due-date default (e.g. to verify the configurable value is used).
+     */
+    TaxInvoiceParserServiceImpl(long timeout, TimeUnit unit, int defaultDueDateDays) {
+        this(unit.toMillis(timeout), defaultDueDateDays);
     }
 
     /**
      * No-arg constructor kept for existing test classes that call
-     * {@code new TaxInvoiceParserServiceImpl()} directly.  Uses the same 10-second
-     * default as the production bean.
+     * {@code new TaxInvoiceParserServiceImpl()} directly.  Uses production defaults.
      */
     TaxInvoiceParserServiceImpl() {
-        this(TimeUnit.SECONDS.toMillis(10));
+        this(TimeUnit.SECONDS.toMillis(10), 30);
     }
 
-    private TaxInvoiceParserServiceImpl(long parseTimeoutMs) {
+    private TaxInvoiceParserServiceImpl(long parseTimeoutMs, int defaultDueDateDays) {
         this.parseTimeoutMs = parseTimeoutMs;
+        this.defaultDueDateDays = defaultDueDateDays;
         this.parseExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         try {
@@ -337,9 +355,9 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             }
         }
 
-        // Default to issue date + 30 days if not specified
-        log.warn("Due date not found in XML, defaulting to issue date + 30 days");
-        return issueDate.plusDays(30);
+        // Default when XML omits due date (configurable via app.tax-invoice.default-due-date-days)
+        log.warn("Due date not found in XML, defaulting to issue date + {} days", defaultDueDateDays);
+        return issueDate.plusDays(defaultDueDateDays);
     }
 
     private Party extractSeller(SupplyChainTradeTransactionType transaction)
