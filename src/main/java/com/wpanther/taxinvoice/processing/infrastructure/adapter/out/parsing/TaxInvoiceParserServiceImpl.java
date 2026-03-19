@@ -447,7 +447,8 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         }
         if (country == null) {
             log.warn("{} PostalTradeAddress present but CountryID is absent — party address will be null "
-                + "(optional per Thai e-Tax XSD)", partyType);
+                + "(optional per Thai e-Tax XSD). Discarded: street='{}', city='{}', postalCode='{}'",
+                partyType, streetAddress, city, postalCode);
             return null;
         }
 
