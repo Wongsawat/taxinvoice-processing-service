@@ -53,6 +53,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -109,25 +110,35 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
      */
     private final ExecutorService parseExecutor;
 
+    /**
+     * Caps the number of concurrent JAXB unmarshal tasks.
+     * {@code newVirtualThreadPerTaskExecutor} is unbounded by design; without this
+     * guard a burst of requests would spawn an unlimited number of CPU-bound virtual
+     * threads, all competing for the same platform threads and degrading throughput.
+     * Configured via {@code app.parsing.max-concurrent} (default: 100).
+     */
+    private final Semaphore parseSemaphore;
+
     // ---- Constructors -------------------------------------------------------
 
     /**
-     * Production constructor — Spring resolves both configurable values and injects them.
+     * Production constructor — Spring resolves all configurable values and injects them.
      */
     @org.springframework.beans.factory.annotation.Autowired
     public TaxInvoiceParserServiceImpl(
             @Value("${app.parsing.timeout-seconds:10}") int parseTimeoutSeconds,
+            @Value("${app.parsing.max-concurrent:100}") int maxConcurrentParses,
             @Value("${app.tax-invoice.default-due-date-days:30}") int defaultDueDateDays) {
-        this(TimeUnit.SECONDS.toMillis(parseTimeoutSeconds), defaultDueDateDays);
+        this(TimeUnit.SECONDS.toMillis(parseTimeoutSeconds), defaultDueDateDays, maxConcurrentParses);
     }
 
     /**
      * Package-private constructor for unit tests that need fine-grained timeout control
      * (e.g. 100 ms instead of 10 s) without a Spring context.  Uses the default 30-day
-     * due-date fallback.
+     * due-date fallback and unbounded concurrency.
      */
     TaxInvoiceParserServiceImpl(long timeout, TimeUnit unit) {
-        this(unit.toMillis(timeout), 30);
+        this(unit.toMillis(timeout), 30, Integer.MAX_VALUE);
     }
 
     /**
@@ -135,20 +146,29 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
      * and a custom due-date default (e.g. to verify the configurable value is used).
      */
     TaxInvoiceParserServiceImpl(long timeout, TimeUnit unit, int defaultDueDateDays) {
-        this(unit.toMillis(timeout), defaultDueDateDays);
+        this(unit.toMillis(timeout), defaultDueDateDays, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Package-private constructor for tests that need to exercise the concurrency cap.
+     */
+    TaxInvoiceParserServiceImpl(long timeout, TimeUnit unit, int defaultDueDateDays, int maxConcurrentParses) {
+        this(unit.toMillis(timeout), defaultDueDateDays, maxConcurrentParses);
     }
 
     /**
      * No-arg constructor kept for existing test classes that call
-     * {@code new TaxInvoiceParserServiceImpl()} directly.  Uses production defaults.
+     * {@code new TaxInvoiceParserServiceImpl()} directly.  Uses production defaults
+     * and unbounded concurrency (tests are single-threaded).
      */
     TaxInvoiceParserServiceImpl() {
-        this(TimeUnit.SECONDS.toMillis(10), 30);
+        this(TimeUnit.SECONDS.toMillis(10), 30, Integer.MAX_VALUE);
     }
 
-    private TaxInvoiceParserServiceImpl(long parseTimeoutMs, int defaultDueDateDays) {
+    private TaxInvoiceParserServiceImpl(long parseTimeoutMs, int defaultDueDateDays, int maxConcurrentParses) {
         this.parseTimeoutMs = parseTimeoutMs;
         this.defaultDueDateDays = defaultDueDateDays;
+        this.parseSemaphore = new Semaphore(maxConcurrentParses);
         this.parseExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         try {
@@ -264,6 +284,17 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             throw TaxInvoiceParserPort.TaxInvoiceParsingException.forOversized(byteSize, MAX_XML_BYTES);
         }
 
+        // Apply the concurrency cap before spawning a virtual thread.
+        // Without this guard, newVirtualThreadPerTaskExecutor() is unbounded and a
+        // burst of requests would create unlimited CPU-bound virtual threads, all
+        // competing for the same platform thread pool and degrading throughput.
+        try {
+            parseSemaphore.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forInterrupted();
+        }
+
         Future<TaxInvoice_CrossIndustryInvoiceType> future =
             parseExecutor.submit(() -> doUnmarshal(xmlContent));
 
@@ -283,6 +314,8 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             future.cancel(true);
             Thread.currentThread().interrupt();
             throw TaxInvoiceParserPort.TaxInvoiceParsingException.forInterrupted();
+        } finally {
+            parseSemaphore.release();
         }
     }
 

@@ -571,6 +571,19 @@ class TaxInvoiceParserServiceImplTest {
         assertEquals(new BigDecimal("100.00"), invoice.getItems().get(0).taxRate());
     }
 
+    @Test
+    void testParseWithConcurrencyLimitOfOneSucceeds()
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Given: parser configured with maxConcurrentParses=1 (tightest possible cap)
+        TaxInvoiceParserServiceImpl limitedParser =
+            new TaxInvoiceParserServiceImpl(10, TimeUnit.SECONDS, 30, 1);
+
+        // When / Then: a single sequential parse must succeed
+        ProcessedTaxInvoice invoice = limitedParser.parse(getSampleTaxInvoiceXml(), "test-semaphore");
+        assertNotNull(invoice);
+        assertEquals("TV2025-00001", invoice.getInvoiceNumber());
+    }
+
     /**
      * Sample Thai e-Tax tax invoice XML for testing
      */
