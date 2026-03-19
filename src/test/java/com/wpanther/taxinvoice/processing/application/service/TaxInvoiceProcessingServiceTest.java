@@ -278,35 +278,6 @@ class TaxInvoiceProcessingServiceTest {
     @Test
     void testCompensateDeletesExistingInvoice() throws Exception {
         // Given
-        TaxInvoiceId id = TaxInvoiceId.generate();
-        Party seller = Party.of(
-            "Seller Company",
-            TaxIdentifier.of("1234567890", "VAT"),
-            new Address("123 Street", "Bangkok", "10110", "TH")
-        );
-        Party buyer = Party.of(
-            "Buyer Company",
-            TaxIdentifier.of("9876543210", "VAT"),
-            new Address("456 Road", "Chiang Mai", "50000", "TH")
-        );
-        LineItem item = new LineItem(
-            "Service 1",
-            10,
-            Money.of(new BigDecimal("1000.00"), "THB"),
-            new BigDecimal("7.00")
-        );
-        validInvoice = ProcessedTaxInvoice.builder()
-            .id(id)
-            .sourceInvoiceId("intake-123")
-            .invoiceNumber("TXN-001")
-            .issueDate(LocalDate.of(2025, 1, 1))
-            .dueDate(LocalDate.of(2025, 2, 1))
-            .seller(seller)
-            .buyer(buyer)
-            .addItem(item)
-            .currency("THB")
-            .originalXml("<xml>test</xml>")
-            .build();
         when(invoiceRepository.findBySourceInvoiceId("intake-123")).thenReturn(Optional.of(validInvoice));
 
         // When
@@ -314,7 +285,7 @@ class TaxInvoiceProcessingServiceTest {
 
         // Then
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
-        verify(invoiceRepository).deleteById(id);
+        verify(invoiceRepository).deleteById(validInvoice.getId());
         verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
     }
 
