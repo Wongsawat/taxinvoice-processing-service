@@ -22,11 +22,19 @@ import java.time.temporal.ChronoUnit;
  * will eventually degrade Debezium CDC poll latency and {@code findPendingEvents}
  * query performance.
  *
+ * <p><b>Compliance note:</b> this table is a transient Debezium CDC relay, not
+ * a compliance store.  Long-term audit retention of signed XML and signed PDF
+ * documents is the responsibility of the document-storage-service (MinIO/S3).
+ * A 7-day window is therefore sufficient here — once Debezium has read and
+ * published an outbox row to Kafka the row has no further operational value.
+ *
  * <p>Configurable properties (with production-safe defaults):
  * <ul>
  *   <li>{@code app.outbox.cleanup.retention-days} — how many days to keep
  *       published events (default: 7)</li>
- *   <li>{@code app.outbox.cleanup.cron} — when to run (default: 02:00 daily)</li>
+ *   <li>{@code app.outbox.cleanup.cron} — when to run (default: 02:00 daily
+ *       in the JVM timezone; pin {@code TZ=Asia/Bangkok} in the container
+ *       manifest for predictable Thai-business-hours behaviour)</li>
  * </ul>
  *
  * <p>Failures increment {@code outbox.cleanup.failure} so alerting can detect

@@ -65,7 +65,12 @@ app:
                                 # so operators may set this to a shorter value in production.
   outbox:
     cleanup:
+      # This table is a transient Debezium CDC relay only — NOT the compliance store.
+      # Signed XML / PDF audit retention is handled by document-storage-service (MinIO/S3).
+      # 7 days is sufficient: once a row is published to Kafka it has no further value.
       retention-days: 7
+      # Runs at 02:00 in the JVM timezone. Pin TZ=Asia/Bangkok in the container manifest
+      # for predictable Thai-business-hours behaviour.
       cron: "0 0 2 * * *"
   camel:
     retry:
