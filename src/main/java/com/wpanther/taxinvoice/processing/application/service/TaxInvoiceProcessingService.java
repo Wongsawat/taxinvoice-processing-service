@@ -82,7 +82,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             .description("Number of duplicate processing requests handled idempotently")
             .register(meterRegistry);
         this.processConcurrentDuplicateCounter = Counter.builder("taxinvoice.processing.concurrent_duplicate")
-            .description("Number of DataIntegrityViolationExceptions resolved as concurrent duplicate inserts")
+            .description("Number of DuplicateKeyExceptions resolved as concurrent duplicate inserts on source_invoice_id")
             .register(meterRegistry);
         this.compensateSuccessCounter = Counter.builder("taxinvoice.compensation.success")
             .description("Number of successful compensations")
