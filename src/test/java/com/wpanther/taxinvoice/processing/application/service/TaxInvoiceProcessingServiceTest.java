@@ -123,19 +123,68 @@ class TaxInvoiceProcessingServiceTest {
 
     @Test
     void testProcessInvoiceForSagaAlreadyProcessed() throws Exception {
-        // Given
-        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(validInvoice));
+        // Given — simulate a COMPLETED invoice already in DB (true idempotent case)
+        Party seller = Party.of("Seller Company", TaxIdentifier.of("1234567890", "VAT"),
+            new Address("123 Street", "Bangkok", "10110", "TH"));
+        Party buyer = Party.of("Buyer Company", TaxIdentifier.of("9876543210", "VAT"),
+            new Address("456 Road", "Chiang Mai", "50000", "TH"));
+        LineItem item = new LineItem("Service 1", 10,
+            Money.of(new BigDecimal("1000.00"), "THB"), new BigDecimal("7.00"));
+        ProcessedTaxInvoice completedInvoice = ProcessedTaxInvoice.builder()
+            .id(TaxInvoiceId.generate())
+            .sourceInvoiceId("intake-123")
+            .invoiceNumber("TXN-001")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .seller(seller).buyer(buyer).addItem(item)
+            .currency("THB").originalXml("<xml>test</xml>")
+            .status(ProcessingStatus.COMPLETED)
+            .build();
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(completedInvoice));
 
         // When
         service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
 
-        // Then - idempotent: should return early without processing
+        // Then — no re-processing; saga reply still published
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(parserService, never()).parse(anyString(), anyString());
         verify(invoiceRepository, never()).save(any(ProcessedTaxInvoice.class));
         verify(eventPublisher, never()).publish(any());
-        // For idempotent case, saga reply is still published
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
+    }
+
+    @Test
+    void testProcessInvoiceForSagaResumesCompletionFromProcessingState() throws Exception {
+        // Given — previous attempt saved the entity in PROCESSING state but failed before
+        // completing it. The retry delivers the same command.
+        Party seller = Party.of("Seller Company", TaxIdentifier.of("1234567890", "VAT"),
+            new Address("123 Street", "Bangkok", "10110", "TH"));
+        Party buyer = Party.of("Buyer Company", TaxIdentifier.of("9876543210", "VAT"),
+            new Address("456 Road", "Chiang Mai", "50000", "TH"));
+        LineItem item = new LineItem("Service 1", 10,
+            Money.of(new BigDecimal("1000.00"), "THB"), new BigDecimal("7.00"));
+        ProcessedTaxInvoice processingInvoice = ProcessedTaxInvoice.builder()
+            .id(TaxInvoiceId.generate())
+            .sourceInvoiceId("intake-123")
+            .invoiceNumber("TXN-001")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .seller(seller).buyer(buyer).addItem(item)
+            .currency("THB").originalXml("<xml>test</xml>")
+            .status(ProcessingStatus.PROCESSING)
+            .build();
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(processingInvoice));
+
+        // When
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
+
+        // Then — no re-parsing, no re-inserting; entity completed and events published
+        verify(parserService, never()).parse(anyString(), anyString());
+        verify(invoiceRepository, times(1)).save(any(ProcessedTaxInvoice.class));
+        verify(eventPublisher).publish(any(TaxInvoiceProcessedDomainEvent.class));
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123");
+        // Verify the domain object was actually transitioned to COMPLETED
+        assertEquals(ProcessingStatus.COMPLETED, processingInvoice.getStatus());
     }
 
     @Test

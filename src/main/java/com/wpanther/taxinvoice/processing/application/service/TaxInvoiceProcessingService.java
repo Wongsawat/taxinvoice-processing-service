@@ -8,6 +8,7 @@ import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPu
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
+import com.wpanther.taxinvoice.processing.domain.model.ProcessingStatus;
 import com.wpanther.taxinvoice.processing.domain.port.out.ProcessedTaxInvoiceRepository;
 import com.wpanther.taxinvoice.processing.domain.port.out.TaxInvoiceParserPort;
 import io.micrometer.core.instrument.Counter;
@@ -172,14 +173,49 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
         log.info("Processing tax invoice for saga, document: {}", documentId);
 
-        // Idempotency check
+        // Idempotency check — also resumes partial-failure where a previous attempt
+        // saved the entity in PROCESSING state but died before reaching COMPLETED.
         Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
         if (existing.isPresent()) {
-            log.warn("Tax invoice already processed for document {}, returning existing", documentId);
-            processIdempotentCounter.increment();
-            // Still publish success for idempotent case
-            sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
-            return existing.get();
+            ProcessedTaxInvoice existingInvoice = existing.get();
+
+            if (existingInvoice.getStatus() == ProcessingStatus.COMPLETED) {
+                // True idempotent case: a prior attempt fully committed this document.
+                log.warn("Tax invoice already completed for document {}, returning idempotent success", documentId);
+                processIdempotentCounter.increment();
+                sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+                return existingInvoice;
+            }
+
+            if (existingInvoice.getStatus() == ProcessingStatus.PROCESSING) {
+                // Partial failure: entity was inserted (PROCESSING) but the attempt died
+                // before markCompleted() + second save could commit. Resume from here
+                // without re-parsing or re-inserting — avoids a duplicate-key violation
+                // and ensures the orchestrator always receives a SUCCESS reply.
+                log.warn("Tax invoice for document {} found in PROCESSING state — previous attempt "
+                        + "failed mid-flight; resuming completion", documentId);
+                existingInvoice.markCompleted();
+                invoiceRepository.save(existingInvoice);
+                TaxInvoiceProcessedDomainEvent domainEvent = new TaxInvoiceProcessedDomainEvent(
+                    existingInvoice.getId(),
+                    existingInvoice.getInvoiceNumber(),
+                    existingInvoice.getTotal(),
+                    sagaId,
+                    correlationId,
+                    Instant.now()
+                );
+                eventPublisher.publish(domainEvent);
+                sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+                processSuccessCounter.increment();
+                log.info("Resumed and completed tax invoice: {}", existingInvoice.getInvoiceNumber());
+                return existingInvoice;
+            }
+
+            // PENDING is never persisted; FAILED not yet implemented.
+            // Surface unexpected state as a clear error rather than silently mis-routing.
+            throw new IllegalStateException(
+                "Tax invoice for document " + documentId + " has unexpected persisted status: "
+                    + existingInvoice.getStatus());
         }
 
         // Parse XML to domain model
