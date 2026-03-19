@@ -9,6 +9,10 @@ import java.time.Instant;
  * Domain event raised when tax invoice processing completes.
  * Pure Java record — no framework or infrastructure dependencies.
  * The application layer translates this into a Kafka DTO via TaxInvoiceEventPublishingPort.
+ *
+ * <p>Use the static factory {@link #of} in production code so the field-to-argument
+ * mapping is visible at the call site and {@code occurredAt} is stamped exactly once.
+ * The canonical constructor is available for tests that require a fixed timestamp.
  */
 public record TaxInvoiceProcessedDomainEvent(
     TaxInvoiceId invoiceId,
@@ -17,4 +21,13 @@ public record TaxInvoiceProcessedDomainEvent(
     String sagaId,
     String correlationId,
     Instant occurredAt
-) {}
+) {
+    public static TaxInvoiceProcessedDomainEvent of(
+            TaxInvoiceId invoiceId,
+            String invoiceNumber,
+            Money total,
+            String sagaId,
+            String correlationId) {
+        return new TaxInvoiceProcessedDomainEvent(invoiceId, invoiceNumber, total, sagaId, correlationId, Instant.now());
+    }
+}

@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -214,13 +213,12 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                         + "failed mid-flight; resuming completion", documentId);
                 existingInvoice.markCompleted();
                 invoiceRepository.save(existingInvoice);
-                TaxInvoiceProcessedDomainEvent domainEvent = new TaxInvoiceProcessedDomainEvent(
+                TaxInvoiceProcessedDomainEvent domainEvent = TaxInvoiceProcessedDomainEvent.of(
                     existingInvoice.getId(),
                     existingInvoice.getInvoiceNumber(),
                     existingInvoice.getTotal(),
                     sagaId,
-                    correlationId,
-                    Instant.now()
+                    correlationId
                 );
                 eventPublisher.publish(domainEvent);
                 sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
@@ -252,13 +250,12 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         invoiceRepository.save(saved);
 
         // Publish notification event (kept for notification-service)
-        TaxInvoiceProcessedDomainEvent domainEvent = new TaxInvoiceProcessedDomainEvent(
+        TaxInvoiceProcessedDomainEvent domainEvent = TaxInvoiceProcessedDomainEvent.of(
             saved.getId(),
             saved.getInvoiceNumber(),
             saved.getTotal(),
             sagaId,
-            correlationId,
-            Instant.now()
+            correlationId
         );
         eventPublisher.publish(domainEvent);
 
