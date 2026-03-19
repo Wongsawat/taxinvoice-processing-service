@@ -39,9 +39,8 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
      * </ul>
      *
      * <p>Violating the contract by passing a non-PROCESSING invoice that has never been
-     * INSERTed causes the UPDATE path to silently match zero rows — the invoice is lost with
-     * no error.  An {@code assert} guards this at development/test time (assertions are
-     * enabled via {@code -ea} in the Maven Surefire configuration).
+     * INSERTed is detected by an {@link IllegalStateException} thrown unconditionally
+     * (not {@code assert}) so the failure is loud in all environments, including production.
      */
     @Override
     @Transactional
@@ -63,11 +62,14 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
         } else {
             // Guard: a non-PROCESSING invoice passed to save() must already exist in the
             // database — otherwise the UPDATE below silently affects zero rows (data loss).
-            // This assertion fires during tests (-ea) and catches callers that skip the
-            // mandatory PROCESSING → INSERT step.
-            assert jpaRepository.existsById(id)
-                : "save() called with non-PROCESSING status on unpersisted invoice: " + id
-                  + " (status=" + invoice.getStatus() + ")";
+            // Throws unconditionally (not assert) so contract violations are caught in
+            // production regardless of whether the JVM was started with -ea.
+            if (!jpaRepository.existsById(id)) {
+                throw new IllegalStateException(
+                    "save() called with non-PROCESSING status on unpersisted invoice: " + id
+                    + " (status=" + invoice.getStatus() + "). Callers must call startProcessing()"
+                    + " and save() once with PROCESSING status before updating to another status.");
+            }
 
             // Existing entity — update only mutable fields via direct UPDATE,
             // avoiding a full SELECT + dirty-check cycle on every state transition.

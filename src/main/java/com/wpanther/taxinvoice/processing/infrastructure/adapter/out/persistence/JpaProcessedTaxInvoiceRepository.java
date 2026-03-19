@@ -37,8 +37,12 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
     Optional<ProcessedTaxInvoiceEntity> findBySourceInvoiceIdWithDetails(@Param("sourceInvoiceId") String sourceInvoiceId);
 
     /**
-     * Update only the mutable state fields (status, errorMessage, completedAt).
+     * Update only the mutable state fields (status, errorMessage, completedAt, updatedAt).
      * Used by save() on the update path to avoid loading the full entity.
+     *
+     * <p>{@code i.updatedAt = CURRENT_TIMESTAMP} is set explicitly because this
+     * {@code @Modifying} JPQL query bypasses Hibernate lifecycle callbacks, so the
+     * {@code @UpdateTimestamp} annotation on the entity field does not fire here.
      *
      * <p>{@code i.version = i.version + 1} keeps the optimistic-locking column
      * consistent with JPA-managed saves. Without this, the version stays at its
@@ -48,7 +52,7 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
     @Modifying(clearAutomatically = true)
     @Query("UPDATE ProcessedTaxInvoiceEntity i " +
            "SET i.status = :status, i.errorMessage = :errorMessage, i.completedAt = :completedAt, " +
-           "    i.version = i.version + 1 " +
+           "    i.updatedAt = CURRENT_TIMESTAMP, i.version = i.version + 1 " +
            "WHERE i.id = :id")
     void updateStatusFields(@Param("id") UUID id,
                             @Param("status") ProcessingStatus status,

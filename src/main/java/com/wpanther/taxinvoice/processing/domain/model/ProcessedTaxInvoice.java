@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.processing.domain.model;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -60,7 +61,7 @@ public class ProcessedTaxInvoice {
         this.currency = Objects.requireNonNull(builder.currency, "Currency is required");
         this.originalXml = Objects.requireNonNull(builder.originalXml, "Original XML is required");
         this.status = builder.status != null ? builder.status : ProcessingStatus.PENDING;
-        this.createdAt = builder.createdAt != null ? builder.createdAt : LocalDateTime.now();
+        this.createdAt = builder.createdAt != null ? builder.createdAt : LocalDateTime.now(ZoneOffset.UTC);
         this.completedAt = builder.completedAt;
         this.errorMessage = builder.errorMessage;
 
@@ -157,7 +158,7 @@ public class ProcessedTaxInvoice {
             throw new IllegalStateException("Can only complete from PROCESSING status");
         }
         this.status = ProcessingStatus.COMPLETED;
-        this.completedAt = LocalDateTime.now();
+        this.completedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     // Getters
