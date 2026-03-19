@@ -59,6 +59,10 @@ camel:
 app:
   parsing:
     timeout-seconds: 10  # Maximum wall-clock time allowed for XML unmarshalling per message
+    max-concurrent: 300  # Semaphore cap on concurrent JAXB unmarshal tasks.
+                         # 300 = consumersCount(3) × maxPollRecords(100) — matches the
+                         # maximum burst the Camel consumer can deliver so no artificial
+                         # backpressure is applied. Lower this value to shed load intentionally.
   tax-invoice:
     default-due-date-days: 30  # Days added to issue date when XML omits a due date.
                                 # Thai RD submission deadline is the 15th of the following month,

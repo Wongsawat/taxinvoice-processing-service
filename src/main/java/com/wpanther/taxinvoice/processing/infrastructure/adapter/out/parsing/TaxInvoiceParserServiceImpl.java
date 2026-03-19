@@ -115,7 +115,9 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
      * {@code newVirtualThreadPerTaskExecutor} is unbounded by design; without this
      * guard a burst of requests would spawn an unlimited number of CPU-bound virtual
      * threads, all competing for the same platform threads and degrading throughput.
-     * Configured via {@code app.parsing.max-concurrent} (default: 100).
+     * Configured via {@code app.parsing.max-concurrent} (default: 300 =
+     * consumersCount(3) × maxPollRecords(100) — matches the maximum burst the
+     * Camel consumer can deliver, so no artificial backpressure is applied).
      */
     private final Semaphore parseSemaphore;
 
@@ -127,7 +129,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
     @org.springframework.beans.factory.annotation.Autowired
     public TaxInvoiceParserServiceImpl(
             @Value("${app.parsing.timeout-seconds:10}") int parseTimeoutSeconds,
-            @Value("${app.parsing.max-concurrent:100}") int maxConcurrentParses,
+            @Value("${app.parsing.max-concurrent:300}") int maxConcurrentParses,
             @Value("${app.tax-invoice.default-due-date-days:30}") int defaultDueDateDays) {
         this(TimeUnit.SECONDS.toMillis(parseTimeoutSeconds), defaultDueDateDays, maxConcurrentParses);
     }
