@@ -55,6 +55,10 @@ public class OutboxCleanupScheduler {
 
     @PostConstruct
     void logConfiguration() {
+        if (retentionDays < 1) {
+            throw new IllegalStateException(
+                "app.outbox.cleanup.retention-days must be >= 1, got: " + retentionDays);
+        }
         log.info("OutboxCleanupScheduler initialized: retention={} days, cron='{}'",
             retentionDays, cleanupCron);
     }
