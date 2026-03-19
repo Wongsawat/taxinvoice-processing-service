@@ -25,10 +25,12 @@ import com.wpanther.etax.generated.taxinvoice.ram.TradeProductType;
 import com.wpanther.etax.generated.taxinvoice.ram.TradeTaxType;
 import com.wpanther.etax.generated.taxinvoice.ram.TaxRegistrationType;
 import com.wpanther.etax.generated.taxinvoice.rsm.TaxInvoice_CrossIndustryInvoiceType;
+import jakarta.annotation.PreDestroy;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.xml.sax.InputSource;
 
@@ -40,15 +42,33 @@ import javax.xml.parsers.SAXParserFactory;
 import javax.xml.transform.sax.SAXSource;
 import java.io.StringReader;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Implementation of TaxInvoiceParserService that uses teda library's JAXB classes
  * to parse Thai e-Tax tax invoice XML.
+ *
+ * <p>Two safety guards are applied before JAXB touches the bytes:
+ * <ol>
+ *   <li><b>Size check</b> — rejects payloads larger than {@value #MAX_XML_BYTES} bytes
+ *       (UTF-8) to prevent memory exhaustion from deliberately oversized inputs.</li>
+ *   <li><b>Wall-clock timeout</b> — the JAXB unmarshal runs in a dedicated virtual-thread
+ *       executor; if parsing has not finished within {@code app.parsing.timeout-seconds}
+ *       (default 10 s) the task is cancelled and a {@link TaxInvoiceParserPort.TaxInvoiceParsingException}
+ *       is thrown.  This prevents a pathological XML structure from blocking a Camel
+ *       consumer thread indefinitely even when entity-expansion caps are in place.</li>
+ * </ol>
  */
 @Slf4j
 @Service
@@ -56,15 +76,58 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
     private static final ZoneId TH_ZONE = ZoneId.of("Asia/Bangkok");
 
+    /** Maximum accepted XML payload size (UTF-8 bytes). */
+    static final int MAX_XML_BYTES = 500 * 1024; // 500 KB
+
     private final JAXBContext jaxbContext;
     private final SAXParserFactory saxParserFactory;
+    private final long parseTimeoutMs;
 
-    public TaxInvoiceParserServiceImpl() {
+    /**
+     * Dedicated virtual-thread executor for timed JAXB unmarshal operations.
+     * Virtual threads (Java 21) are cheap, so each parse call gets its own thread
+     * without consuming platform threads from the Camel consumer pool.
+     */
+    private final ExecutorService parseExecutor;
+
+    // ---- Constructors -------------------------------------------------------
+
+    /**
+     * Production constructor — Spring resolves {@code app.parsing.timeout-seconds}
+     * (default 10) and injects it here.
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    public TaxInvoiceParserServiceImpl(
+            @Value("${app.parsing.timeout-seconds:10}") int parseTimeoutSeconds) {
+        this(TimeUnit.SECONDS.toMillis(parseTimeoutSeconds));
+    }
+
+    /**
+     * Package-private constructor for unit tests that need fine-grained timeout control
+     * (e.g. 100 ms instead of 10 s) without a Spring context.
+     */
+    TaxInvoiceParserServiceImpl(long timeout, TimeUnit unit) {
+        this(unit.toMillis(timeout));
+    }
+
+    /**
+     * No-arg constructor kept for existing test classes that call
+     * {@code new TaxInvoiceParserServiceImpl()} directly.  Uses the same 10-second
+     * default as the production bean.
+     */
+    TaxInvoiceParserServiceImpl() {
+        this(TimeUnit.SECONDS.toMillis(10));
+    }
+
+    private TaxInvoiceParserServiceImpl(long parseTimeoutMs) {
+        this.parseTimeoutMs = parseTimeoutMs;
+        this.parseExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
         try {
-            // Initialize JAXB context with the implementation package
-            // The teda library uses interface/implementation pattern with a custom JAXBContextFactory
-            // We need to use the package path to let the factory handle the context creation
-            // CRITICAL: Uses taxinvoice packages, NOT invoice packages
+            // Initialize JAXB context with the implementation package.
+            // The teda library uses interface/implementation pattern with a custom
+            // JAXBContextFactory. We use the package path so the factory handles context
+            // creation. CRITICAL: must use taxinvoice packages, NOT invoice packages.
             String contextPath = "com.wpanther.etax.generated.taxinvoice.rsm.impl" +
                                ":com.wpanther.etax.generated.taxinvoice.ram.impl" +
                                ":com.wpanther.etax.generated.common.qdt.impl" +
@@ -77,7 +140,8 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         }
 
         try {
-            // Secure SAX parser factory — disables external entities and DOCTYPE to prevent XXE/XML-bomb attacks
+            // Secure SAX parser factory — disables external entities and DOCTYPE to
+            // prevent XXE / XML-bomb attacks.
             SAXParserFactory factory = SAXParserFactory.newInstance();
             factory.setNamespaceAware(true);
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
@@ -90,6 +154,13 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         }
     }
 
+    @PreDestroy
+    public void shutdownExecutor() {
+        parseExecutor.shutdown();
+    }
+
+    // ---- Public API ---------------------------------------------------------
+
     @Override
     public ProcessedTaxInvoice parse(String xmlContent, String sourceInvoiceId)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
@@ -97,18 +168,20 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         log.debug("Starting XML parsing for source invoice ID: {}", sourceInvoiceId);
 
         try {
-            // Step 1: Unmarshal XML to JAXB object
+            // Step 1: Unmarshal XML to JAXB object (size-checked and time-bounded)
             TaxInvoice_CrossIndustryInvoiceType jaxbInvoice = unmarshalXml(xmlContent);
 
             // Step 2: Extract invoice components
             ExchangedDocumentType document = jaxbInvoice.getExchangedDocument();
             if (document == null) {
-                throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Tax invoice XML missing required ExchangedDocument element");
+                throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                    "Tax invoice XML missing required ExchangedDocument element");
             }
 
             SupplyChainTradeTransactionType transaction = jaxbInvoice.getSupplyChainTradeTransaction();
             if (transaction == null) {
-                throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Tax invoice XML missing required SupplyChainTradeTransaction element");
+                throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                    "Tax invoice XML missing required SupplyChainTradeTransaction element");
             }
 
             // Step 3: Map to domain model
@@ -140,8 +213,15 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         }
     }
 
+    // ---- Unmarshal (size-check + timeout) -----------------------------------
+
     /**
-     * Unmarshal XML string to JAXB object
+     * Validates the XML payload size and delegates the actual JAXB unmarshal to
+     * {@link #doUnmarshal(String)}, which runs inside a time-bounded executor task.
+     *
+     * <p>If the parse does not complete within {@code parseTimeoutMs} milliseconds
+     * the executor task is cancelled and a {@link TaxInvoiceParserPort.TaxInvoiceParsingException}
+     * is thrown, preventing indefinite blocking of the calling Camel consumer thread.
      */
     private TaxInvoice_CrossIndustryInvoiceType unmarshalXml(String xmlContent)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
@@ -149,6 +229,44 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         if (xmlContent == null || xmlContent.isBlank()) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("XML content is null or empty");
         }
+
+        // Reject oversized payloads before touching the SAX parser.
+        int byteSize = xmlContent.getBytes(StandardCharsets.UTF_8).length;
+        if (byteSize > MAX_XML_BYTES) {
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "XML payload too large: " + byteSize + " bytes (limit " + MAX_XML_BYTES + " bytes / 500 KB)");
+        }
+
+        Future<TaxInvoice_CrossIndustryInvoiceType> future =
+            parseExecutor.submit(() -> doUnmarshal(xmlContent));
+
+        try {
+            return future.get(parseTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "XML parsing timed out after " + parseTimeoutMs + " ms — possible malformed input");
+        } catch (ExecutionException e) {
+            future.cancel(true);
+            Throwable cause = e.getCause();
+            if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException ex) {
+                throw ex;
+            }
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "XML parsing failed: " + cause.getMessage(), cause);
+        } catch (InterruptedException e) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException("XML parsing was interrupted");
+        }
+    }
+
+    /**
+     * Performs the actual JAXB unmarshal.  Runs inside an executor task submitted
+     * by {@link #unmarshalXml(String)} so that it can be cancelled if it takes too long.
+     */
+    private TaxInvoice_CrossIndustryInvoiceType doUnmarshal(String xmlContent)
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
         try {
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
@@ -168,40 +286,34 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
             // Handle JAXBElement wrapper (common when no @XmlRootElement annotation)
             if (result instanceof jakarta.xml.bind.JAXBElement) {
-                jakarta.xml.bind.JAXBElement<?> jaxbElement = (jakarta.xml.bind.JAXBElement<?>) result;
-                result = jaxbElement.getValue();
+                result = ((jakarta.xml.bind.JAXBElement<?>) result).getValue();
             }
 
             if (!(result instanceof TaxInvoice_CrossIndustryInvoiceType)) {
                 throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                    "Unexpected root element: " + result.getClass().getName()
-                );
+                    "Unexpected root element: " + result.getClass().getName());
             }
 
             return (TaxInvoice_CrossIndustryInvoiceType) result;
 
         } catch (JAXBException | org.xml.sax.SAXException | ParserConfigurationException e) {
             log.error("JAXB unmarshalling failed", e);
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Failed to parse XML: " + e.getMessage(), e);
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "Failed to parse XML: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Extract invoice number from document
-     */
+    // ---- Domain extraction helpers ------------------------------------------
+
     private String extractInvoiceNumber(ExchangedDocumentType document)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
         if (document.getID() == null || document.getID().getValue() == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Tax invoice number (ID) is missing");
         }
-
         return document.getID().getValue();
     }
 
-    /**
-     * Extract issue date from document
-     */
     private LocalDate extractIssueDate(ExchangedDocumentType document)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
@@ -209,23 +321,17 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         if (issueDateTime == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Issue date/time is missing");
         }
-
         return convertXMLGregorianCalendarToLocalDate(issueDateTime);
     }
 
-    /**
-     * Extract due date from transaction settlement
-     */
     private LocalDate extractDueDate(SupplyChainTradeTransactionType transaction, LocalDate issueDate)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
         HeaderTradeSettlementType settlement = transaction.getApplicableHeaderTradeSettlement();
 
-        // Due date might be in payment terms
         List<TradePaymentTermsType> paymentTerms = settlement.getSpecifiedTradePaymentTerms();
         if (paymentTerms != null && !paymentTerms.isEmpty()) {
-            TradePaymentTermsType terms = paymentTerms.get(0);
-            XMLGregorianCalendar dueDateTime = terms.getDueDateDateTime();
+            XMLGregorianCalendar dueDateTime = paymentTerms.get(0).getDueDateDateTime();
             if (dueDateTime != null) {
                 return convertXMLGregorianCalendarToLocalDate(dueDateTime);
             }
@@ -236,9 +342,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         return issueDate.plusDays(30);
     }
 
-    /**
-     * Extract seller party information
-     */
     private Party extractSeller(SupplyChainTradeTransactionType transaction)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
@@ -246,13 +349,9 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         if (agreement == null || agreement.getSellerTradeParty() == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Seller information is missing");
         }
-
         return mapParty(agreement.getSellerTradeParty(), "Seller");
     }
 
-    /**
-     * Extract buyer party information
-     */
     private Party extractBuyer(SupplyChainTradeTransactionType transaction)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
@@ -260,25 +359,17 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         if (agreement == null || agreement.getBuyerTradeParty() == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Buyer information is missing");
         }
-
         return mapParty(agreement.getBuyerTradeParty(), "Buyer");
     }
 
-    /**
-     * Map JAXB trade party to domain Party
-     */
     private Party mapParty(TradePartyType jaxbParty, String partyType)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
-        // Extract name
         String name = Optional.ofNullable(jaxbParty.getName())
             .map(n -> n.getValue())
             .orElseThrow(() -> new TaxInvoiceParsingException(partyType + " name is missing"));
 
-        // Extract tax identifier
         TaxIdentifier taxIdentifier = extractTaxIdentifier(jaxbParty, partyType);
-
-        // Extract address
         Address address = extractAddress(jaxbParty, partyType);
 
         // Extract email (optional)
@@ -295,25 +386,20 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         return Party.of(name, taxIdentifier, address, email);
     }
 
-    /**
-     * Extract tax identifier from party
-     */
     private TaxIdentifier extractTaxIdentifier(TradePartyType jaxbParty, String partyType)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
         TaxRegistrationType taxReg = jaxbParty.getSpecifiedTaxRegistration();
         if (taxReg == null) {
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(partyType + " tax registration is missing");
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                partyType + " tax registration is missing");
         }
-
         if (taxReg.getID() == null || taxReg.getID().getValue() == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException(partyType + " tax ID is missing");
         }
 
         String taxId = taxReg.getID().getValue();
-        String scheme = Optional.ofNullable(taxReg.getID().getSchemeID())
-            .orElse("VAT");
-
+        String scheme = Optional.ofNullable(taxReg.getID().getSchemeID()).orElse("VAT");
         return TaxIdentifier.of(taxId, scheme);
     }
 
@@ -334,18 +420,12 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             return null;
         }
 
-        // Build address (some fields may be optional)
         String streetAddress = Optional.ofNullable(jaxbAddress.getLineOne())
-            .map(line -> line.getValue())
-            .orElse(null);
-
+            .map(line -> line.getValue()).orElse(null);
         String city = Optional.ofNullable(jaxbAddress.getCityName())
-            .map(name -> name.getValue())
-            .orElse(null);
-
+            .map(name -> name.getValue()).orElse(null);
         String postalCode = Optional.ofNullable(jaxbAddress.getPostcodeCode())
-            .map(code -> code.getValue())
-            .orElse(null);
+            .map(code -> code.getValue()).orElse(null);
 
         String country = null;
         if (jaxbAddress.getCountryID() != null && jaxbAddress.getCountryID().getValue() != null) {
@@ -360,9 +440,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         return Address.of(streetAddress, city, postalCode, country);
     }
 
-    /**
-     * Extract line items
-     */
     private List<LineItem> extractLineItems(SupplyChainTradeTransactionType transaction, String currency)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
@@ -370,32 +447,28 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             transaction.getIncludedSupplyChainTradeLineItem();
 
         if (jaxbItems == null || jaxbItems.isEmpty()) {
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Tax invoice must have at least one line item");
+            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                "Tax invoice must have at least one line item");
         }
 
         List<LineItem> items = new ArrayList<>();
-
         for (SupplyChainTradeLineItemType jaxbItem : jaxbItems) {
             items.add(mapLineItem(jaxbItem, currency));
         }
-
         return items;
     }
 
-    /**
-     * Map JAXB line item to domain LineItem
-     */
     private LineItem mapLineItem(SupplyChainTradeLineItemType jaxbItem, String currency)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
-        // Extract product description
+        // Product description
         TradeProductType product = jaxbItem.getSpecifiedTradeProduct();
         if (product == null || product.getName() == null || product.getName().isEmpty()) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Line item product name is missing");
         }
         String description = product.getName().get(0).getValue();
 
-        // Extract quantity
+        // Quantity
         LineTradeDeliveryType delivery = jaxbItem.getSpecifiedLineTradeDelivery();
         if (delivery == null || delivery.getBilledQuantity() == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Line item quantity is missing");
@@ -413,7 +486,7 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
                 "Line item quantity out of integer range: " + quantityDecimal, e);
         }
 
-        // Extract unit price
+        // Unit price
         LineTradeAgreementType agreement = jaxbItem.getSpecifiedLineTradeAgreement();
         if (agreement == null || agreement.getGrossPriceProductTradePrice() == null) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Line item unit price is missing");
@@ -427,16 +500,13 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
                 "Line item has " + priceType.getChargeAmount().size() + " price amounts; "
                 + "exactly one ChargeAmount is expected per GrossPriceProductTradePrice");
         }
-        BigDecimal unitPriceAmount = priceType.getChargeAmount().get(0).getValue();
-        Money unitPrice = Money.of(unitPriceAmount, currency);
+        Money unitPrice = Money.of(priceType.getChargeAmount().get(0).getValue(), currency);
 
-        // Extract tax rate
+        // Tax rate (optional — defaults to 0%)
         LineTradeSettlementType settlement = jaxbItem.getSpecifiedLineTradeSettlement();
         BigDecimal taxRate = BigDecimal.ZERO;
-
         if (settlement != null && settlement.getApplicableTradeTax() != null
-            && !settlement.getApplicableTradeTax().isEmpty()) {
-
+                && !settlement.getApplicableTradeTax().isEmpty()) {
             TradeTaxType tax = settlement.getApplicableTradeTax().get(0);
             if (tax.getCalculatedRate() != null) {
                 taxRate = tax.getCalculatedRate();
@@ -446,9 +516,6 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         return new LineItem(description, quantity, unitPrice, taxRate);
     }
 
-    /**
-     * Extract currency code
-     */
     private String extractCurrency(SupplyChainTradeTransactionType transaction)
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
@@ -461,11 +528,9 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
         if (settlement.getInvoiceCurrencyCode().getValue() != null) {
             currency = settlement.getInvoiceCurrencyCode().getValue().value();
         }
-
         if (currency == null || currency.length() != 3) {
             throw new TaxInvoiceParserPort.TaxInvoiceParsingException("Invalid currency code: " + currency);
         }
-
         return currency;
     }
 

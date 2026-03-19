@@ -13,6 +13,7 @@ import javax.xml.transform.sax.SAXSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -1552,6 +1553,54 @@ class TaxInvoiceParserServiceImplTest {
             </ram:SellerTradeParty>
             """;
         return buildXml(standardExchangedDocument(), standardSupplyChain(sellerNoId));
+    }
+
+    // -----------------------------------------------------------------------
+    // Wall-clock timeout and payload-size guard
+    // -----------------------------------------------------------------------
+
+    /**
+     * A JAXB unmarshaller that sleeps before returning simulates a pathologically
+     * slow XML document. With a 100 ms timeout the parser must give up and throw
+     * TaxInvoiceParsingException rather than blocking the calling thread forever.
+     */
+    @Test
+    void parse_whenParsingExceedsTimeout_throwsParsingException() throws Exception {
+        try (MockedStatic<JAXBContext> mockedJaxb = mockStatic(JAXBContext.class)) {
+            JAXBContext mockContext = mock(JAXBContext.class);
+            Unmarshaller mockUnmarshaller = mock(Unmarshaller.class);
+            mockedJaxb.when(() -> JAXBContext.newInstance(anyString())).thenReturn(mockContext);
+            when(mockContext.createUnmarshaller()).thenReturn(mockUnmarshaller);
+            when(mockUnmarshaller.unmarshal(any(SAXSource.class))).thenAnswer(invocation -> {
+                Thread.sleep(5_000); // simulate a parse that never finishes in time
+                return null;
+            });
+
+            // Service configured with a very short timeout so the test completes quickly
+            TaxInvoiceParserServiceImpl service =
+                new TaxInvoiceParserServiceImpl(100, TimeUnit.MILLISECONDS);
+
+            TaxInvoiceParserPort.TaxInvoiceParsingException ex = assertThrows(
+                TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+                () -> service.parse(getSampleTaxInvoiceXml(), "timeout-test")
+            );
+            assertTrue(ex.getMessage().contains("timed out"),
+                "Exception message should mention timeout but was: " + ex.getMessage());
+        }
+    }
+
+    @Test
+    void parse_whenXmlExceedsMaxSize_throwsParsingException() {
+        // Build a payload that exceeds the 500 KB limit
+        String padding = "x".repeat(TaxInvoiceParserServiceImpl.MAX_XML_BYTES + 1);
+        String oversized = "<root>" + padding + "</root>";
+
+        TaxInvoiceParserPort.TaxInvoiceParsingException ex = assertThrows(
+            TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+            () -> parserService.parse(oversized, "size-test")
+        );
+        assertTrue(ex.getMessage().contains("too large"),
+            "Exception message should mention size but was: " + ex.getMessage());
     }
 
     // -----------------------------------------------------------------------

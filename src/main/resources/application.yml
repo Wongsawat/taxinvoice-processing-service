@@ -54,6 +54,8 @@ camel:
 
 # Application-specific configuration
 app:
+  parsing:
+    timeout-seconds: 10  # Maximum wall-clock time allowed for XML unmarshalling per message
   outbox:
     cleanup:
       retention-days: 7
