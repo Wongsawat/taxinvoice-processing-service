@@ -31,18 +31,22 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
 
         UUID id = invoice.getId().value();
 
+        ProcessedTaxInvoice result;
         if (jpaRepository.existsById(id)) {
             // Entity exists — update only mutable fields via direct UPDATE,
             // avoiding a full SELECT + dirty-check cycle on every state transition.
             jpaRepository.updateStatusFields(
                 id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getCompletedAt());
+            result = invoice;
         } else {
-            // New entity — full mapping
-            jpaRepository.save(mapper.toEntity(invoice));
+            // New entity — full mapping. Map the saved entity back to domain so
+            // server-side fields (@CreationTimestamp, @Version) are reflected.
+            ProcessedTaxInvoiceEntity saved = jpaRepository.save(mapper.toEntity(invoice));
+            result = mapper.toDomain(saved);
         }
 
         log.info("Saved processed tax invoice: {} with ID: {}", invoice.getInvoiceNumber(), id);
-        return invoice;
+        return result;
     }
 
     @Override
