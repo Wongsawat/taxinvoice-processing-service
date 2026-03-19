@@ -70,7 +70,7 @@ public class ProcessedTaxInvoice {
         this.total = subtotal.add(totalTax);
 
         // Validate business rules
-        validateInvariant();
+        validateInvariants();
     }
 
     /**
@@ -94,7 +94,7 @@ public class ProcessedTaxInvoice {
     /**
      * Validate business invariants
      */
-    private void validateInvariant() {
+    private void validateInvariants() {
         if (items.isEmpty()) {
             throw new IllegalStateException("Tax invoice must have at least one line item");
         }
