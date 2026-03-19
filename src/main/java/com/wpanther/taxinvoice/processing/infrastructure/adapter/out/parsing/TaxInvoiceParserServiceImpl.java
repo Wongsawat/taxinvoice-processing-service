@@ -48,6 +48,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -78,6 +79,15 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
     /** Maximum accepted XML payload size (UTF-8 bytes). */
     static final int MAX_XML_BYTES = 500 * 1024; // 500 KB
+
+    /**
+     * Recognised tax identifier scheme codes per Thai e-Tax specification.
+     * An unrecognised schemeID is logged and silently replaced with "VAT" rather
+     * than rejecting the document, because the scheme is metadata that does not
+     * affect tax calculations. A multi-kilobyte scheme string is thereby also
+     * sanitised before reaching the database.
+     */
+    private static final Set<String> VALID_TAX_ID_SCHEMES = Set.of("VAT", "EIN", "TAX");
 
     private final JAXBContext jaxbContext;
     private final SAXParserFactory saxParserFactory;
@@ -414,6 +424,11 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
         String taxId = taxReg.getID().getValue();
         String scheme = Optional.ofNullable(taxReg.getID().getSchemeID()).orElse("VAT");
+        if (!VALID_TAX_ID_SCHEMES.contains(scheme)) {
+            log.warn("{} tax identifier scheme '{}' is not recognised — defaulting to VAT",
+                    partyType, scheme);
+            scheme = "VAT";
+        }
         return TaxIdentifier.of(taxId, scheme);
     }
 

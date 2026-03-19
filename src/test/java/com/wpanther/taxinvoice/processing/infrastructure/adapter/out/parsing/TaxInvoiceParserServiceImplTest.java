@@ -513,6 +513,33 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     @Test
+    void testParseTaxInvoiceWithUnrecognisedTaxIdSchemeDefaultsToVat()
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Given: seller whose schemeID is not in the whitelist
+        String xmlContent = getTaxInvoiceXmlWithSellerTaxIdScheme("UNKNOWN_SCHEME");
+
+        // When: parsing succeeds (document is not rejected)
+        ProcessedTaxInvoice invoice = parserService.parse(xmlContent, "test-123");
+
+        // Then: scheme is silently normalised to "VAT"
+        assertNotNull(invoice);
+        assertEquals("VAT", invoice.getSeller().taxIdentifier().orElseThrow().scheme());
+    }
+
+    @Test
+    void testParseTaxInvoiceWithKnownTaxIdSchemePreserved()
+            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Given: seller with a whitelisted scheme
+        String xmlContent = getTaxInvoiceXmlWithSellerTaxIdScheme("EIN");
+
+        // When: parsing succeeds
+        ProcessedTaxInvoice invoice = parserService.parse(xmlContent, "test-123");
+
+        // Then: scheme is preserved as-is
+        assertEquals("EIN", invoice.getSeller().taxIdentifier().orElseThrow().scheme());
+    }
+
+    @Test
     void testParseTaxInvoiceWithTaxRateAbove100() {
         // Given: line item with tax rate 999.99 — would inflate totals ~14×
         String xmlContent = getTaxInvoiceXmlWithTaxRate("999.99");
@@ -1567,6 +1594,25 @@ class TaxInvoiceParserServiceImplTest {
             </ram:IncludedSupplyChainTradeLineItem>
             """;
         return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithSellerTaxIdScheme(String scheme) {
+        String seller = """
+            <ram:SellerTradeParty>
+              <ram:Name>Acme Corporation Ltd.</ram:Name>
+              <ram:PostalTradeAddress>
+                <ram:LineOne>123 Business Street</ram:LineOne>
+                <ram:CityName>Bangkok</ram:CityName>
+                <ram:PostcodeCode>10110</ram:PostcodeCode>
+                <ram:CountryID>TH</ram:CountryID>
+              </ram:PostalTradeAddress>
+              <ram:SpecifiedTaxRegistration>
+                <ram:ID schemeID=\"""" + scheme + """
+                \">1234567890123</ram:ID>
+              </ram:SpecifiedTaxRegistration>
+            </ram:SellerTradeParty>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChain(seller));
     }
 
     private String getTaxInvoiceXmlWithTaxRate(String rate) {
