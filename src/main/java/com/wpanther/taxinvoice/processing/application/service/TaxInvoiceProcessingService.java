@@ -221,7 +221,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
      */
     @Override
     @Transactional
-    public void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId) {
+    public void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId)
+            throws CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException {
         log.info("Compensating tax invoice for document: {}", documentId);
 
         try {
@@ -243,6 +244,12 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             compensateFailureCounter.increment();
             log.error("Failed to compensate tax invoice for saga {}: {}", sagaId, e.toString(), e);
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Compensation failed: " + e.toString());
+            // Rethrow so Camel receives a clean exception and triggers DLC retry,
+            // rather than Spring throwing UnexpectedRollbackException when it tries
+            // to commit the ROLLBACK_ONLY outer transaction after a silent return.
+            // deleteById is idempotent (no-op if entity is absent), so retries are safe.
+            throw new CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException(
+                    "Compensation failed for document " + documentId, e);
         }
     }
 

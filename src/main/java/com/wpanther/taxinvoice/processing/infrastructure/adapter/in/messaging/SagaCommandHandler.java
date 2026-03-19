@@ -64,8 +64,18 @@ public class SagaCommandHandler {
     /**
      * Handle a CompensateTaxInvoiceCommand from saga orchestrator.
      * Delegates to use case which handles business logic and reply publishing.
+     *
+     * <h3>Exception contract</h3>
+     * <p>On success, {@code compensate()} commits a COMPENSATED reply to the outbox and returns
+     * normally; Camel commits the Kafka offset.
+     *
+     * <p>On failure, {@code compensate()} commits a FAILURE reply to the outbox (via its own
+     * REQUIRES_NEW transaction) and then throws {@link CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException}.
+     * That exception propagates here to Camel's Dead Letter Channel, triggering a retry.
+     * Retries are safe because {@code deleteById} is a no-op when the entity is absent.
      */
-    public void handleCompensation(CompensateTaxInvoiceCommand command) {
+    public void handleCompensation(CompensateTaxInvoiceCommand command)
+            throws CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException {
         log.info("Handling compensation for saga {} document {}",
             command.getSagaId(), command.getDocumentId());
 

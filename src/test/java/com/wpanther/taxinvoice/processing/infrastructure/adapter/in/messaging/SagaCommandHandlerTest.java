@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -97,17 +98,15 @@ class SagaCommandHandlerTest {
     }
 
     @Test
-    void shouldPropagateExceptionFromCompensateUseCase() {
-        // Given
-        doThrow(new RuntimeException("Compensation error"))
+    void shouldPropagateExceptionFromCompensateUseCase() throws Exception {
+        // Given - use case publishes FAILURE reply then throws TaxInvoiceCompensationException
+        doThrow(new CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException(
+                "Compensation failed", new RuntimeException("DB error")))
             .when(compensateTaxInvoiceUseCase).compensate(any(), any(), any(), any());
 
-        // When/Then - exception propagates
-        try {
-            sagaCommandHandler.handleCompensation(compensateCommand);
-        } catch (RuntimeException e) {
-            // Expected
-        }
+        // When/Then - exception propagates to Camel so the DLC can retry
+        assertThrows(CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException.class,
+            () -> sagaCommandHandler.handleCompensation(compensateCommand));
 
         verify(compensateTaxInvoiceUseCase).compensate(any(), any(), any(), any());
     }

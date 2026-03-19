@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.application.service;
 
 import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.processing.application.port.in.CompensateTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.in.ProcessTaxInvoiceUseCase;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
@@ -226,7 +227,7 @@ class TaxInvoiceProcessingServiceTest {
     }
 
     @Test
-    void testCompensateDeletesExistingInvoice() {
+    void testCompensateDeletesExistingInvoice() throws Exception {
         // Given
         TaxInvoiceId id = TaxInvoiceId.generate();
         Party seller = Party.of(
@@ -269,7 +270,7 @@ class TaxInvoiceProcessingServiceTest {
     }
 
     @Test
-    void testCompensateNotFound() {
+    void testCompensateNotFound() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId("intake-notfound")).thenReturn(Optional.empty());
 
@@ -288,10 +289,10 @@ class TaxInvoiceProcessingServiceTest {
         when(invoiceRepository.findBySourceInvoiceId("intake-123")).thenReturn(Optional.of(validInvoice));
         doThrow(new RuntimeException("DB error")).when(invoiceRepository).deleteById(any());
 
-        // When
-        service.compensate("intake-123", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+        // When/Then - exception is rethrown so Camel DLC can retry; FAILURE reply is still published
+        assertThrows(CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException.class,
+            () -> service.compensate("intake-123", "saga-1", SagaStep.PROCESS_TAX_INVOICE, "corr-1"));
 
-        // Then
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(invoiceRepository).deleteById(any());
         verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("corr-1"), contains("Compensation failed"));
