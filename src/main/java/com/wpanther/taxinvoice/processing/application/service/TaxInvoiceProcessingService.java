@@ -221,8 +221,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
      */
     @Override
     @Transactional
-    public void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId)
-            throws CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException {
+    public void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId) {
         log.info("Compensating tax invoice for document: {}", documentId);
 
         try {

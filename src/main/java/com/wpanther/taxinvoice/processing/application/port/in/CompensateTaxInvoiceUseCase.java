@@ -17,14 +17,15 @@ public interface CompensateTaxInvoiceUseCase {
      * @param sagaStep     Current step in the saga
      * @param correlationId Correlation ID for tracing
      */
-    void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId)
-            throws TaxInvoiceCompensationException;
+    void compensate(String documentId, String sagaId, SagaStep sagaStep, String correlationId);
 
     /**
      * Exception thrown when tax invoice compensation fails.
-     * Propagates to Camel so the Dead Letter Channel can retry the compensation command.
+     * Extends RuntimeException so Spring's @Transactional rolls back automatically,
+     * and the exception propagates cleanly to Camel's Dead Letter Channel for retry
+     * without being replaced by UnexpectedRollbackException.
      */
-    class TaxInvoiceCompensationException extends Exception {
+    class TaxInvoiceCompensationException extends RuntimeException {
         public TaxInvoiceCompensationException(String message, Throwable cause) {
             super(message, cause);
         }

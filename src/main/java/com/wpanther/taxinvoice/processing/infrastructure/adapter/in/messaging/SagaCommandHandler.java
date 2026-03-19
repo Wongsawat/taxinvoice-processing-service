@@ -74,8 +74,7 @@ public class SagaCommandHandler {
      * That exception propagates here to Camel's Dead Letter Channel, triggering a retry.
      * Retries are safe because {@code deleteById} is a no-op when the entity is absent.
      */
-    public void handleCompensation(CompensateTaxInvoiceCommand command)
-            throws CompensateTaxInvoiceUseCase.TaxInvoiceCompensationException {
+    public void handleCompensation(CompensateTaxInvoiceCommand command) {
         log.info("Handling compensation for saga {} document {}",
             command.getSagaId(), command.getDocumentId());
 
