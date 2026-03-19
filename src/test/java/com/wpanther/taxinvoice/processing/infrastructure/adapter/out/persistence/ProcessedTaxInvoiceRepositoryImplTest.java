@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -288,5 +289,29 @@ class ProcessedTaxInvoiceRepositoryImplTest {
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         repository.deleteById(saved.getId());
         assertFalse(repository.findById(saved.getId()).isPresent());
+    }
+
+    @Autowired
+    private JpaProcessedTaxInvoiceRepository jpaRepository;
+
+    @Test
+    void testUpdateStatusFields_incrementsVersion() {
+        // Given: a freshly inserted entity has version = 0
+        ProcessedTaxInvoice saved = repository.save(testInvoice);
+        UUID id = saved.getId().value();
+        assertEquals(0L, jpaRepository.findById(id).orElseThrow().getVersion(),
+            "Version must be 0 after initial INSERT");
+
+        // When: first status update (PENDING → PROCESSING)
+        saved.startProcessing();
+        repository.save(saved);
+        assertEquals(1L, jpaRepository.findById(id).orElseThrow().getVersion(),
+            "Version must be 1 after first updateStatusFields call");
+
+        // When: second status update (PROCESSING → COMPLETED)
+        saved.markCompleted();
+        repository.save(saved);
+        assertEquals(2L, jpaRepository.findById(id).orElseThrow().getVersion(),
+            "Version must be 2 after second updateStatusFields call");
     }
 }

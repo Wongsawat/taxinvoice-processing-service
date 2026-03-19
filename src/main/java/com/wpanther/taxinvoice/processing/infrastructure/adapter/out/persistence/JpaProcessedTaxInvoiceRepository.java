@@ -44,10 +44,16 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
     /**
      * Update only the mutable state fields (status, errorMessage, completedAt).
      * Used by save() on the update path to avoid loading the full entity.
+     *
+     * <p>{@code i.version = i.version + 1} keeps the optimistic-locking column
+     * consistent with JPA-managed saves. Without this, the version stays at its
+     * post-INSERT value after every status transition, so a concurrent entity-level
+     * save would pass the {@code WHERE version = ?} check on stale data.
      */
     @Modifying(clearAutomatically = true)
     @Query("UPDATE ProcessedTaxInvoiceEntity i " +
-           "SET i.status = :status, i.errorMessage = :errorMessage, i.completedAt = :completedAt " +
+           "SET i.status = :status, i.errorMessage = :errorMessage, i.completedAt = :completedAt, " +
+           "    i.version = i.version + 1 " +
            "WHERE i.id = :id")
     void updateStatusFields(@Param("id") UUID id,
                             @Param("status") ProcessingStatus status,
