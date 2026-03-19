@@ -122,6 +122,31 @@ class MoneyTest {
     }
 
     @Test
+    void testMultiplyByInt() {
+        // Given
+        Money money = Money.of(new BigDecimal("1000.00"), "THB");
+
+        // When
+        Money result = money.multiply(10);
+
+        // Then
+        assertEquals(new BigDecimal("10000.00"), result.amount());
+        assertEquals("THB", result.currency());
+    }
+
+    @Test
+    void testMultiplyByIntUsesExactArithmetic() {
+        // multiply(int) must route through BigDecimal, not double.
+        // 0.1 * 3 via double = 0.30000000000000004; via BigDecimal.valueOf = 0.3 exactly.
+        Money money = Money.of(new BigDecimal("0.10"), "THB");
+
+        Money result = money.multiply(3);
+
+        // BigDecimal path: 0.10 * 3 = 0.30 (exact)
+        assertEquals(new BigDecimal("0.30"), result.amount());
+    }
+
+    @Test
     void testMultiplyWithNull() {
         // Given
         Money money = Money.of(new BigDecimal("100.00"), "THB");

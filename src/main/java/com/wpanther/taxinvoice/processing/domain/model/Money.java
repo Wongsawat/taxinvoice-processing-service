@@ -73,6 +73,15 @@ public record Money(BigDecimal amount, String currency) implements Serializable 
     }
 
     /**
+     * Multiply money by an integer factor.
+     * Delegates to {@link #multiply(BigDecimal)} to avoid implicit int→double widening
+     * that would occur if the call resolved to {@link #multiply(double)}.
+     */
+    public Money multiply(int factor) {
+        return multiply(BigDecimal.valueOf(factor));
+    }
+
+    /**
      * Multiply money by a double factor
      */
     public Money multiply(double factor) {
