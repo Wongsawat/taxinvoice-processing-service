@@ -109,7 +109,6 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             processInvoiceForSagaInternal(documentId, xmlContent, sagaId, sagaStep, correlationId);
-            processSuccessCounter.increment();
         } catch (TaxInvoiceParserPort.TaxInvoiceParsingException e) {
             processFailureCounter.increment();
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.toString());
@@ -212,6 +211,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         // Publish saga success reply
         sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
 
+        processSuccessCounter.increment();
         log.info("Successfully processed tax invoice: {}", saved.getInvoiceNumber());
         return saved;
     }
