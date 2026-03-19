@@ -245,14 +245,13 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             throws TaxInvoiceParserPort.TaxInvoiceParsingException {
 
         if (xmlContent == null || xmlContent.isBlank()) {
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException("XML content is null or empty");
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forEmpty();
         }
 
         // Reject oversized payloads before touching the SAX parser.
         int byteSize = xmlContent.getBytes(StandardCharsets.UTF_8).length;
         if (byteSize > MAX_XML_BYTES) {
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                "XML payload too large: " + byteSize + " bytes (limit " + MAX_XML_BYTES + " bytes / 500 KB)");
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forOversized(byteSize, MAX_XML_BYTES);
         }
 
         Future<TaxInvoice_CrossIndustryInvoiceType> future =
@@ -262,20 +261,18 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             return future.get(parseTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                "XML parsing timed out after " + parseTimeoutMs + " ms — possible malformed input");
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forTimeout(parseTimeoutMs);
         } catch (ExecutionException e) {
             future.cancel(true);
             Throwable cause = e.getCause();
             if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException ex) {
                 throw ex;
             }
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                "XML parsing failed: " + cause.getMessage(), cause);
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forUnmarshal(cause);
         } catch (InterruptedException e) {
             future.cancel(true);
             Thread.currentThread().interrupt();
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException("XML parsing was interrupted");
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forInterrupted();
         }
     }
 
@@ -308,16 +305,15 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             }
 
             if (!(result instanceof TaxInvoice_CrossIndustryInvoiceType)) {
-                throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                    "Unexpected root element: " + result.getClass().getName());
+                throw TaxInvoiceParserPort.TaxInvoiceParsingException.forUnexpectedRootElement(
+                    result.getClass().getName());
             }
 
             return (TaxInvoice_CrossIndustryInvoiceType) result;
 
         } catch (JAXBException | org.xml.sax.SAXException | ParserConfigurationException e) {
             log.error("JAXB unmarshalling failed", e);
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
-                "Failed to parse XML: " + e.getMessage(), e);
+            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forUnmarshal(e);
         }
     }
 
