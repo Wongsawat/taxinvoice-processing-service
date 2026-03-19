@@ -37,6 +37,9 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: true
 
+  transaction:
+    default-timeout: 30  # seconds; prevents hung @Transactional methods on DB/network stall
+
   jackson:
     serialization:
       write-dates-as-timestamps: false
