@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging;
 
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
+import com.wpanther.taxinvoice.processing.infrastructure.config.KafkaTopicsProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
@@ -19,18 +20,10 @@ public class SagaRouteConfig extends RouteBuilder {
     private static final String GROUP_ID = "taxinvoice-processing-service";
 
     private final SagaCommandHandler sagaCommandHandler;
+    private final KafkaTopicsProperties topics;
 
     @Value("${app.kafka.bootstrap-servers}")
     private String kafkaBrokers;
-
-    @Value("${app.kafka.topics.saga-command-tax-invoice}")
-    private String sagaCommandTopic;
-
-    @Value("${app.kafka.topics.saga-compensation-tax-invoice}")
-    private String sagaCompensationTopic;
-
-    @Value("${app.kafka.topics.dlq}")
-    private String dlqTopic;
 
     @Value("${app.camel.retry.max-redeliveries:3}")
     private int maxRedeliveries;
@@ -50,8 +43,9 @@ public class SagaRouteConfig extends RouteBuilder {
     @Value("${app.kafka.consumers.count:3}")
     private int consumersCount;
 
-    public SagaRouteConfig(SagaCommandHandler sagaCommandHandler) {
+    public SagaRouteConfig(SagaCommandHandler sagaCommandHandler, KafkaTopicsProperties topics) {
         this.sagaCommandHandler = sagaCommandHandler;
+        this.topics = topics;
     }
 
     /**
@@ -71,7 +65,7 @@ public class SagaRouteConfig extends RouteBuilder {
     public void configure() throws Exception {
 
         // Global error handler - Dead Letter Channel with retries
-        errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=RAW(" + kafkaBrokers + ")")
+        errorHandler(deadLetterChannel("kafka:" + topics.dlq() + "?brokers=RAW(" + kafkaBrokers + ")")
             .maximumRedeliveries(maxRedeliveries)
             .redeliveryDelay(redeliveryDelayMs)
             .useExponentialBackOff()
@@ -83,7 +77,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.command.tax-invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCommandTopic + kafkaConsumerParams())
+        from("kafka:" + topics.sagaCommandTaxInvoice() + kafkaConsumerParams())
             .routeId("saga-command-consumer")
             .log("Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
             .unmarshal().json(JsonLibrary.Jackson, ProcessTaxInvoiceCommand.class)
@@ -98,7 +92,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.compensation.tax-invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCompensationTopic + kafkaConsumerParams())
+        from("kafka:" + topics.sagaCompensationTaxInvoice() + kafkaConsumerParams())
             .routeId("saga-compensation-consumer")
             .log("Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
             .unmarshal().json(JsonLibrary.Jackson, CompensateTaxInvoiceCommand.class)

@@ -1,7 +1,9 @@
 package com.wpanther.taxinvoice.processing;
 
+import com.wpanther.taxinvoice.processing.infrastructure.config.KafkaTopicsProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableDiscoveryClient
 @EnableTransactionManagement
 @EnableScheduling
+@EnableConfigurationProperties(KafkaTopicsProperties.class)
 public class TaxInvoiceProcessingServiceApplication {
 
     public static void main(String[] args) {

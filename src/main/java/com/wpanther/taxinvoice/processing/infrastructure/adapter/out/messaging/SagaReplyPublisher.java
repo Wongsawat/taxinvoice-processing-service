@@ -4,13 +4,15 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging.dto.TaxInvoiceReplyEvent;
 import com.wpanther.taxinvoice.processing.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.processing.infrastructure.config.KafkaTopicsProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+
 
 /**
  * Saga reply publisher - driven adapter that publishes saga replies via outbox pattern.
@@ -26,10 +28,17 @@ public class SagaReplyPublisher implements SagaReplyPort {
     private final HeaderSerializer headerSerializer;
     private final String replyTopic;
 
+    /** Production constructor — Spring injects the bound {@link KafkaTopicsProperties}. */
+    @Autowired
     public SagaReplyPublisher(
             OutboxService outboxService,
             HeaderSerializer headerSerializer,
-            @Value("${app.kafka.topics.saga-reply-tax-invoice}") String replyTopic) {
+            KafkaTopicsProperties topics) {
+        this(outboxService, headerSerializer, topics.sagaReplyTaxInvoice());
+    }
+
+    /** Package-private constructor for unit tests that pass the topic string directly. */
+    SagaReplyPublisher(OutboxService outboxService, HeaderSerializer headerSerializer, String replyTopic) {
         this.outboxService = outboxService;
         this.headerSerializer = headerSerializer;
         this.replyTopic = replyTopic;

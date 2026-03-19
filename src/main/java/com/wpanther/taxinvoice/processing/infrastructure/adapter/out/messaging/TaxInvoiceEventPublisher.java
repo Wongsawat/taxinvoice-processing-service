@@ -4,8 +4,9 @@ import com.wpanther.taxinvoice.processing.application.dto.event.TaxInvoiceProces
 import com.wpanther.taxinvoice.processing.application.port.out.TaxInvoiceEventPublishingPort;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
+import com.wpanther.taxinvoice.processing.infrastructure.config.KafkaTopicsProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,10 +25,18 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
     private final HeaderSerializer headerSerializer;
     private final String taxinvoiceProcessedTopic;
 
+    /** Production constructor — Spring injects the bound {@link KafkaTopicsProperties}. */
+    @Autowired
     public TaxInvoiceEventPublisher(
             OutboxService outboxService,
             HeaderSerializer headerSerializer,
-            @Value("${app.kafka.topics.taxinvoice-processed}") String taxinvoiceProcessedTopic) {
+            KafkaTopicsProperties topics) {
+        this(outboxService, headerSerializer, topics.taxinvoiceProcessed());
+    }
+
+    /** Package-private constructor for unit tests that pass the topic string directly. */
+    TaxInvoiceEventPublisher(OutboxService outboxService, HeaderSerializer headerSerializer,
+                             String taxinvoiceProcessedTopic) {
         this.outboxService = outboxService;
         this.headerSerializer = headerSerializer;
         this.taxinvoiceProcessedTopic = taxinvoiceProcessedTopic;
