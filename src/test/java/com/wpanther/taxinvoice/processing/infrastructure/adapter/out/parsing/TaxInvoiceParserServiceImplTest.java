@@ -512,6 +512,38 @@ class TaxInvoiceParserServiceImplTest {
         assertTrue(exception.getMessage().contains("tax ID") || exception.getMessage().contains("tax registration"));
     }
 
+    @Test
+    void testParseTaxInvoiceWithTaxRateAbove100() {
+        // Given: line item with tax rate 999.99 — would inflate totals ~14×
+        String xmlContent = getTaxInvoiceXmlWithTaxRate("999.99");
+        TaxInvoiceParserPort.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("999.99"),
+            "Exception should quote the offending rate, got: " + exception.getMessage());
+        assertTrue(exception.getMessage().contains("[0, 100]"),
+            "Exception should state the valid range, got: " + exception.getMessage());
+    }
+
+    @Test
+    void testParseTaxInvoiceWithNegativeTaxRate() {
+        // Given: negative tax rate — equally invalid
+        String xmlContent = getTaxInvoiceXmlWithTaxRate("-1.00");
+        TaxInvoiceParserPort.TaxInvoiceParsingException exception =
+            assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
+        assertTrue(exception.getMessage().contains("-1.00"),
+            "Exception should quote the offending rate, got: " + exception.getMessage());
+    }
+
+    @Test
+    void testParseTaxInvoiceWithTaxRateBoundary100() throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Given: tax rate exactly 100 — on the boundary, must be accepted
+        String xmlContent = getTaxInvoiceXmlWithTaxRate("100.00");
+        ProcessedTaxInvoice invoice = parserService.parse(xmlContent, "test-123");
+        assertEquals(new BigDecimal("100.00"), invoice.getItems().get(0).taxRate());
+    }
+
     /**
      * Sample Thai e-Tax tax invoice XML for testing
      */
@@ -1532,6 +1564,31 @@ class TaxInvoiceParserServiceImplTest {
               <ram:SpecifiedLineTradeDelivery>
                 <ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>
               </ram:SpecifiedLineTradeDelivery>
+            </ram:IncludedSupplyChainTradeLineItem>
+            """;
+        return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));
+    }
+
+    private String getTaxInvoiceXmlWithTaxRate(String rate) {
+        String item = """
+            <ram:IncludedSupplyChainTradeLineItem>
+              <ram:SpecifiedTradeProduct>
+                <ram:Name>Professional Services</ram:Name>
+              </ram:SpecifiedTradeProduct>
+              <ram:SpecifiedLineTradeAgreement>
+                <ram:GrossPriceProductTradePrice>
+                  <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                </ram:GrossPriceProductTradePrice>
+              </ram:SpecifiedLineTradeAgreement>
+              <ram:SpecifiedLineTradeDelivery>
+                <ram:BilledQuantity unitCode="C62">1</ram:BilledQuantity>
+              </ram:SpecifiedLineTradeDelivery>
+              <ram:SpecifiedLineTradeSettlement>
+                <ram:ApplicableTradeTax>
+                  <ram:CalculatedRate>""" + rate + """
+                  </ram:CalculatedRate>
+                </ram:ApplicableTradeTax>
+              </ram:SpecifiedLineTradeSettlement>
             </ram:IncludedSupplyChainTradeLineItem>
             """;
         return buildXml(standardExchangedDocument(), standardSupplyChainWithLineItem(item));

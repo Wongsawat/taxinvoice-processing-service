@@ -525,6 +525,11 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             TradeTaxType tax = settlement.getApplicableTradeTax().get(0);
             if (tax.getCalculatedRate() != null) {
                 taxRate = tax.getCalculatedRate();
+                if (taxRate.compareTo(BigDecimal.ZERO) < 0
+                        || taxRate.compareTo(new BigDecimal("100")) > 0) {
+                    throw new TaxInvoiceParserPort.TaxInvoiceParsingException(
+                        "Tax rate " + taxRate + " is outside valid range [0, 100]");
+                }
             }
         }
 
