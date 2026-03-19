@@ -176,11 +176,11 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testUpdateInvoice() {
-        // Given
+        // Given — honour the INSERT/UPDATE contract: first save must be PROCESSING
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
-        saved.startProcessing();
 
-        // When
+        // When — second save is an UPDATE (status is already PROCESSING)
         ProcessedTaxInvoice updated = repository.save(saved);
         Optional<ProcessedTaxInvoice> found = repository.findById(updated.getId());
 
@@ -250,11 +250,11 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testCompleteWorkflowWithRepository() {
-        // Given
+        // Given — honour the INSERT/UPDATE contract: first save must be PROCESSING
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
 
-        // When - Simulate complete workflow
-        saved.startProcessing();
+        // When - Simulate complete workflow (saved is already PROCESSING)
         repository.save(saved);
 
         saved.markCompleted();

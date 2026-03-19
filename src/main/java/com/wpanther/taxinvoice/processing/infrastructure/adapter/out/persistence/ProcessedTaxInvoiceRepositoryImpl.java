@@ -24,6 +24,25 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     private final JpaProcessedTaxInvoiceRepository jpaRepository;
     private final ProcessedTaxInvoiceMapper mapper;
 
+    /**
+     * Persists a {@link ProcessedTaxInvoice}, using its current status as a zero-cost
+     * INSERT vs UPDATE discriminator.
+     *
+     * <p><b>CONTRACT — callers must honour the following invariant:</b>
+     * <ul>
+     *   <li>The <em>first</em> call for any given invoice ID <strong>must</strong> pass a
+     *       {@link ProcessingStatus#PROCESSING} invoice.  The application service guarantees
+     *       this by calling {@code startProcessing()} (PENDING → PROCESSING) before the
+     *       initial {@code save()}.  PENDING is therefore never committed to the database.</li>
+     *   <li>All <em>subsequent</em> calls for the same ID must pass a non-PROCESSING status
+     *       (e.g. COMPLETED, FAILED) — these take the UPDATE path.</li>
+     * </ul>
+     *
+     * <p>Violating the contract by passing a non-PROCESSING invoice that has never been
+     * INSERTed causes the UPDATE path to silently match zero rows — the invoice is lost with
+     * no error.  An {@code assert} guards this at development/test time (assertions are
+     * enabled via {@code -ea} in the Maven Surefire configuration).
+     */
     @Override
     @Transactional
     public ProcessedTaxInvoice save(ProcessedTaxInvoice invoice) {
@@ -42,6 +61,14 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
             ProcessedTaxInvoiceEntity saved = jpaRepository.save(mapper.toEntity(invoice));
             result = mapper.toDomain(saved);
         } else {
+            // Guard: a non-PROCESSING invoice passed to save() must already exist in the
+            // database — otherwise the UPDATE below silently affects zero rows (data loss).
+            // This assertion fires during tests (-ea) and catches callers that skip the
+            // mandatory PROCESSING → INSERT step.
+            assert jpaRepository.existsById(id)
+                : "save() called with non-PROCESSING status on unpersisted invoice: " + id
+                  + " (status=" + invoice.getStatus() + ")";
+
             // Existing entity — update only mutable fields via direct UPDATE,
             // avoiding a full SELECT + dirty-check cycle on every state transition.
             jpaRepository.updateStatusFields(

@@ -305,6 +305,10 @@
                     <excludes>
                         <exclude>**/integration/**</exclude>
                     </excludes>
+                    <!-- Enable Java assertions (-ea) so that assert statements in
+                         production code (e.g. the INSERT/UPDATE discriminator guard
+                         in ProcessedTaxInvoiceRepositoryImpl.save()) fire during tests. -->
+                    <argLine>${argLine} -ea</argLine>
                 </configuration>
             </plugin>
         </plugins>
@@ -326,6 +330,7 @@
                             <excludes>
                                 <exclude>none</exclude>
                             </excludes>
+                            <argLine>${argLine} -ea</argLine>
                             <systemPropertyVariables>
                                 <integration.tests.enabled>true</integration.tests.enabled>
                             </systemPropertyVariables>
