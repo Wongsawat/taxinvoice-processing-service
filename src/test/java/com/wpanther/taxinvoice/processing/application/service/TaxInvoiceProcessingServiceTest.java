@@ -327,7 +327,7 @@ class TaxInvoiceProcessingServiceTest {
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"source_invoice_id\""));
+            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"uq_processed_tax_invoices_source_invoice_id\""));
 
         // When / Then - exception propagates (no silent swallowing), with original cause preserved
         ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
@@ -355,7 +355,7 @@ class TaxInvoiceProcessingServiceTest {
             .thenReturn(Optional.of(validInvoice)); // 2nd call: re-check — concurrent insert committed
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"source_invoice_id\""));
+            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"uq_processed_tax_invoices_source_invoice_id\""));
 
         // When / Then — exception still propagates (prevents Spring UnexpectedRollbackException)
         ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
@@ -405,6 +405,46 @@ class TaxInvoiceProcessingServiceTest {
 
         // Re-check MUST NOT happen — transactionManager.getTransaction never called
         verify(transactionManager, never()).getTransaction(any());
+
+        // Domain event never published
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    /**
+     * A DuplicateKeyException whose cause message does NOT contain the
+     * source_invoice_id constraint name (e.g. duplicate invoice_number from a
+     * different document) must be treated as a plain constraint violation:
+     *  - no REQUIRES_NEW re-check
+     *  - FAILURE reply with "Constraint violation:" prefix
+     *  - processFailureCounter incremented, processConcurrentDuplicateCounter NOT
+     */
+    @Test
+    void testProcessInvoiceForSagaDuplicateKeyOnNonIdempotentConstraint() throws Exception {
+        // Given — invoice_number duplicate (different document, same number): constraint name
+        // does NOT contain "uq_processed_tax_invoices_source_invoice_id"
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
+            .thenThrow(new DuplicateKeyException(
+                "duplicate key value violates unique constraint \"idx_tax_invoice_number_unique\""));
+
+        // When / Then — exception thrown immediately (no re-check)
+        ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
+            assertThrows(ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_TAX_INVOICE, "correlation-123"));
+        assertInstanceOf(DuplicateKeyException.class, ex.getCause());
+        assertTrue(ex.getMessage().contains("Constraint violation"),
+            "Exception message should say 'Constraint violation'");
+
+        // FAILURE reply, not success
+        verify(sagaReplyPort).publishFailure(
+            eq("saga-1"), eq(SagaStep.PROCESS_TAX_INVOICE), eq("correlation-123"),
+            contains("Constraint violation"));
+        verify(sagaReplyPort, never()).publishSuccess(any(), any(), any());
+
+        // Re-check MUST NOT happen — only one findBySourceInvoiceId call (the initial idempotency check)
+        verify(invoiceRepository, times(1)).findBySourceInvoiceId(anyString());
 
         // Domain event never published
         verify(eventPublisher, never()).publish(any());

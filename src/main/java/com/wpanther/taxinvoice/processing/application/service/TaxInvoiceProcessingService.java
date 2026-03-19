@@ -115,13 +115,31 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Parse error: " + e.toString());
             throw new TaxInvoiceProcessingException("Failed to parse tax invoice: " + e.toString(), e);
         } catch (DuplicateKeyException e) {
+            // Only the source_invoice_id constraint violation indicates a potential race condition
+            // (two threads inserting the same document concurrently). Any other unique constraint
+            // violation (e.g. duplicate invoice_number from a different document) is a data error
+            // and must fail immediately without a REQUIRES_NEW re-check.
+            String causeMsg = e.getMostSpecificCause().getMessage();
+            boolean isSourceIdViolation = causeMsg != null
+                    && causeMsg.contains("uq_processed_tax_invoices_source_invoice_id");
+
+            if (!isSourceIdViolation) {
+                processFailureCounter.increment();
+                log.error("Duplicate key violation on non-idempotent constraint for document {}, saga {}: {}",
+                        documentId, sagaId, e.toString());
+                sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                        "Constraint violation for document " + documentId + ": " + e.toString());
+                throw new TaxInvoiceProcessingException(
+                        "Constraint violation for document " + documentId, e);
+            }
+
             // Race-condition duplicate insert on source_invoice_id unique constraint.
             // Spring translates both PostgreSQL error 23505 and H2 unique index violations
             // to DuplicateKeyException, so this catch is DB-dialect-agnostic.
             // The outer transaction is ROLLBACK_ONLY; re-check in a fresh REQUIRES_NEW
             // transaction so we can reply SUCCESS if a concurrent thread already committed
             // the document — preventing the orchestrator from compensating committed work.
-            log.warn("DuplicateKeyException for document {}, saga {} — re-checking for concurrent insert",
+            log.warn("DuplicateKeyException on source_invoice_id for document {}, saga {} — re-checking for concurrent insert",
                     documentId, sagaId);
             requiresNewTemplate.execute(txStatus -> {
                 Optional<ProcessedTaxInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
@@ -132,8 +150,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                     processConcurrentDuplicateCounter.increment();
                     sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                 } else {
-                    // Duplicate-key signal but no record found — unexpected state
-                    log.error("DuplicateKeyException for document {} but no record found — replying FAILURE",
+                    // source_invoice_id constraint fired but no record found — unexpected state.
+                    log.error("DuplicateKeyException on source_invoice_id for document {} but no record found — replying FAILURE",
                             documentId);
                     processFailureCounter.increment();
                     sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
