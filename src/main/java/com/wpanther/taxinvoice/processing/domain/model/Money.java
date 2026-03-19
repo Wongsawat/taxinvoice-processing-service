@@ -82,8 +82,10 @@ public record Money(BigDecimal amount, String currency) implements Serializable 
     }
 
     /**
-     * Multiply money by a double factor
+     * Multiply money by a double factor.
+     * @deprecated Use {@link #multiply(BigDecimal)} instead to avoid floating-point precision issues.
      */
+    @Deprecated(forRemoval = true, since = "1.0")
     public Money multiply(double factor) {
         return multiply(BigDecimal.valueOf(factor));
     }
