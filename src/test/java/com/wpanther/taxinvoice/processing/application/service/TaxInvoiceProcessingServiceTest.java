@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -298,12 +299,14 @@ class TaxInvoiceProcessingServiceTest {
 
     @Test
     void testProcessInvoiceForSagaDataIntegrityViolationPropagates() throws Exception {
-        // Given - simulate race condition: idempotency check passes but insert conflicts
+        // Given - simulate race condition: idempotency check passes but insert conflicts.
+        // Uses DuplicateKeyException (Spring's dialect-agnostic subclass) — works with both
+        // PostgreSQL (error 23505) and H2 (unique index violation).
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new DataIntegrityViolationException("duplicate key: source_invoice_id"));
+            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"source_invoice_id\""));
 
         // When / Then - exception propagates (no silent swallowing), with original cause preserved
         ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
@@ -331,7 +334,7 @@ class TaxInvoiceProcessingServiceTest {
             .thenReturn(Optional.of(validInvoice)); // 2nd call: re-check — concurrent insert committed
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedTaxInvoice.class)))
-            .thenThrow(new DataIntegrityViolationException("duplicate key: source_invoice_id"));
+            .thenThrow(new DuplicateKeyException("duplicate key value violates unique constraint \"source_invoice_id\""));
 
         // When / Then — exception still propagates (prevents Spring UnexpectedRollbackException)
         ProcessTaxInvoiceUseCase.TaxInvoiceProcessingException ex =
@@ -349,10 +352,10 @@ class TaxInvoiceProcessingServiceTest {
     }
 
     /**
-     * A DataIntegrityViolationException whose message does NOT contain "duplicate key" or
-     * "source_invoice_id" (e.g. value-too-long, check-constraint) must:
+     * A plain DataIntegrityViolationException (value-too-long, check-constraint, etc.)
+     * is NOT a DuplicateKeyException, so it must:
      *  - skip the race-condition re-check entirely (no second findBySourceInvoiceId call)
-     *  - publish FAILURE with "Constraint violation:" prefix, not "Duplicate document:"
+     *  - publish FAILURE with "Constraint violation:" prefix
      *  - increment processFailureCounter, not processConcurrentDuplicateCounter
      *  - throw TaxInvoiceProcessingException immediately
      */
