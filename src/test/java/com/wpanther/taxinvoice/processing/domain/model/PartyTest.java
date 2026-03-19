@@ -2,6 +2,8 @@ package com.wpanther.taxinvoice.processing.domain.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -18,12 +20,12 @@ class PartyTest {
         String email = "info@acme.com";
 
         // When
-        Party party = new Party(name, taxId, address, email);
+        Party party = new Party(name, Optional.of(taxId), address, email);
 
         // Then
         assertNotNull(party);
         assertEquals(name, party.name());
-        assertEquals(taxId, party.taxIdentifier());
+        assertEquals(Optional.of(taxId), party.taxIdentifier());
         assertEquals(address, party.address());
         assertEquals(email, party.email());
     }
@@ -41,7 +43,7 @@ class PartyTest {
         // Then
         assertNotNull(party);
         assertEquals(name, party.name());
-        assertEquals(taxId, party.taxIdentifier());
+        assertEquals(Optional.of(taxId), party.taxIdentifier());
         assertEquals(address, party.address());
         assertNull(party.email());
     }
@@ -71,7 +73,7 @@ class PartyTest {
 
         // When/Then
         assertThrows(NullPointerException.class, () ->
-            new Party(null, taxId, address, null)
+            new Party(null, Optional.of(taxId), address, null)
         );
     }
 
@@ -83,11 +85,11 @@ class PartyTest {
 
         // When/Then
         assertThrows(IllegalArgumentException.class, () ->
-            new Party("", taxId, address, null)
+            new Party("", Optional.of(taxId), address, null)
         );
 
         assertThrows(IllegalArgumentException.class, () ->
-            new Party("   ", taxId, address, null)
+            new Party("   ", Optional.of(taxId), address, null)
         );
     }
 
@@ -97,12 +99,12 @@ class PartyTest {
         String name = "Test Company";
         Address address = new Address("Street", "City", "Code", "TH");
 
-        // When
-        Party party = new Party(name, null, address, null);
+        // When — null is normalised to Optional.empty() by the compact constructor
+        Party party = new Party(name, Optional.empty(), address, null);
 
         // Then
         assertNotNull(party);
-        assertNull(party.taxIdentifier());
+        assertTrue(party.taxIdentifier().isEmpty());
     }
 
     @Test
@@ -112,7 +114,7 @@ class PartyTest {
         TaxIdentifier taxId = TaxIdentifier.of("1234567890");
 
         // When
-        Party party = new Party(name, taxId, null, null);
+        Party party = new Party(name, Optional.of(taxId), null, null);
 
         // Then
         assertNotNull(party);
@@ -127,7 +129,7 @@ class PartyTest {
         Address address = new Address("Street", "City", "Code", "TH");
 
         // When
-        Party party = new Party(name, taxId, address, null);
+        Party party = new Party(name, Optional.of(taxId), address, null);
 
         // Then
         assertNotNull(party);
@@ -167,7 +169,7 @@ class PartyTest {
         // Given
         Party party = new Party(
             "Test Company",
-            TaxIdentifier.of("1234567890"),
+            Optional.of(TaxIdentifier.of("1234567890")),
             new Address("Street", "City", "Code", "TH"),
             "   "
         );
@@ -182,9 +184,9 @@ class PartyTest {
         TaxIdentifier taxId = TaxIdentifier.of("1234567890");
         Address address = new Address("Street", "City", "Code", "TH");
 
-        Party party1 = new Party("Company A", taxId, address, "email@test.com");
-        Party party2 = new Party("Company A", taxId, address, "email@test.com");
-        Party party3 = new Party("Company B", taxId, address, "email@test.com");
+        Party party1 = new Party("Company A", Optional.of(taxId), address, "email@test.com");
+        Party party2 = new Party("Company A", Optional.of(taxId), address, "email@test.com");
+        Party party3 = new Party("Company B", Optional.of(taxId), address, "email@test.com");
 
         // When/Then
         assertEquals(party1, party2);
@@ -197,8 +199,8 @@ class PartyTest {
         TaxIdentifier taxId = TaxIdentifier.of("1234567890");
         Address address = new Address("Street", "City", "Code", "TH");
 
-        Party party1 = new Party("Company A", taxId, address, "email@test.com");
-        Party party2 = new Party("Company A", taxId, address, "email@test.com");
+        Party party1 = new Party("Company A", Optional.of(taxId), address, "email@test.com");
+        Party party2 = new Party("Company A", Optional.of(taxId), address, "email@test.com");
 
         // When/Then
         assertEquals(party1.hashCode(), party2.hashCode());

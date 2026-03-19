@@ -91,8 +91,8 @@ class TaxInvoiceParserServiceImplTest {
         Party seller = invoice.getSeller();
         assertNotNull(seller);
         assertEquals("Acme Corporation Ltd.", seller.name());
-        assertEquals("1234567890123", seller.taxIdentifier().value());
-        assertEquals("VAT", seller.taxIdentifier().scheme());
+        assertEquals("1234567890123", seller.taxIdentifier().orElseThrow().value());
+        assertEquals("VAT", seller.taxIdentifier().orElseThrow().scheme());
 
         Address sellerAddress = seller.address();
         assertNotNull(sellerAddress);
@@ -114,7 +114,7 @@ class TaxInvoiceParserServiceImplTest {
         Party buyer = invoice.getBuyer();
         assertNotNull(buyer);
         assertEquals("Customer Company Ltd.", buyer.name());
-        assertEquals("9876543210987", buyer.taxIdentifier().value());
+        assertEquals("9876543210987", buyer.taxIdentifier().orElseThrow().value());
 
         Address buyerAddress = buyer.address();
         assertNotNull(buyerAddress);
@@ -268,8 +268,8 @@ class TaxInvoiceParserServiceImplTest {
 
         // Then: Tax scheme should default to "VAT"
         assertNotNull(invoice);
-        assertEquals("VAT", invoice.getSeller().taxIdentifier().scheme());
-        assertEquals("1234567890123", invoice.getSeller().taxIdentifier().value());
+        assertEquals("VAT", invoice.getSeller().taxIdentifier().orElseThrow().scheme());
+        assertEquals("1234567890123", invoice.getSeller().taxIdentifier().orElseThrow().value());
     }
 
     @Test

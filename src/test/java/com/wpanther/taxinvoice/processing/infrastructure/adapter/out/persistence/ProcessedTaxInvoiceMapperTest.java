@@ -188,13 +188,13 @@ class ProcessedTaxInvoiceMapperTest {
         // Then
         assertNotNull(reconstructed.getSeller());
         assertEquals("Seller Company", reconstructed.getSeller().name());
-        assertEquals("1234567890", reconstructed.getSeller().taxIdentifier().value());
+        assertEquals("1234567890", reconstructed.getSeller().taxIdentifier().orElseThrow().value());
         assertEquals("123 Street", reconstructed.getSeller().address().streetAddress());
         assertEquals("seller@company.com", reconstructed.getSeller().email());
 
         assertNotNull(reconstructed.getBuyer());
         assertEquals("Buyer Company", reconstructed.getBuyer().name());
-        assertEquals("9876543210", reconstructed.getBuyer().taxIdentifier().value());
+        assertEquals("9876543210", reconstructed.getBuyer().taxIdentifier().orElseThrow().value());
     }
 
     @Test
@@ -451,6 +451,6 @@ class ProcessedTaxInvoiceMapperTest {
         ProcessedTaxInvoice result = mapper.toDomain(entity);
 
         // Then
-        assertNull(result.getSeller().taxIdentifier());
+        assertTrue(result.getSeller().taxIdentifier().isEmpty());
     }
 }

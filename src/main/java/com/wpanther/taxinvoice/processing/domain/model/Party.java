@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.processing.domain.model;
 
 import java.io.Serializable;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Value Object representing a business party (seller or buyer) in a tax invoice.
@@ -10,8 +11,9 @@ import java.util.Objects;
  * <ul>
  *   <li>{@code name} — required; enforced by the compact constructor.</li>
  *   <li>{@code taxIdentifier} — required by Thai e-Tax specification; the XML parser
- *       always provides a non-null value. May be {@code null} only when a party is
- *       reconstructed from a legacy database row that predates the not-null constraint.</li>
+ *       always provides a non-empty value. May be {@link Optional#empty()} only when a
+ *       party is reconstructed from a legacy database row that predates the not-null
+ *       constraint. Use {@link Optional#orElseThrow()} for the normal (non-legacy) path.</li>
  *   <li>{@code address} — {@code null} when the party's {@code PostalTradeAddress}
  *       element is absent or has no {@code CountryID} in the source XML (both optional
  *       per Thai e-Tax XSD), or when the party is reconstructed from a legacy database
@@ -21,7 +23,7 @@ import java.util.Objects;
  */
 public record Party(
     String name,
-    TaxIdentifier taxIdentifier,
+    Optional<TaxIdentifier> taxIdentifier,
     Address address,
     String email
 ) implements Serializable {
@@ -32,20 +34,23 @@ public record Party(
         if (name.isBlank()) {
             throw new IllegalArgumentException("Party name cannot be blank");
         }
+
+        // Normalise null to Optional.empty() so callers never receive a null Optional.
+        taxIdentifier = taxIdentifier != null ? taxIdentifier : Optional.empty();
     }
 
     /**
      * Create party with minimal information
      */
     public static Party of(String name, TaxIdentifier taxIdentifier, Address address) {
-        return new Party(name, taxIdentifier, address, null);
+        return new Party(name, Optional.ofNullable(taxIdentifier), address, null);
     }
 
     /**
      * Create party with all information
      */
     public static Party of(String name, TaxIdentifier taxIdentifier, Address address, String email) {
-        return new Party(name, taxIdentifier, address, email);
+        return new Party(name, Optional.ofNullable(taxIdentifier), address, email);
     }
 
     /**

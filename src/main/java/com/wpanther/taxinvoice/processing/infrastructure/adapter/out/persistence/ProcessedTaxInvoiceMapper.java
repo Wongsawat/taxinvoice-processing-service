@@ -97,14 +97,14 @@ public class ProcessedTaxInvoiceMapper {
                 "No BUYER party found for invoice " + entity.getId());
         }
 
-        // Warn on null taxIdentifier — required by Thai e-Tax specification but stored as
+        // Warn on absent taxIdentifier — required by Thai e-Tax specification but stored as
         // nullable to support legacy rows that predate the parser's enforcement of the field.
-        if (seller.taxIdentifier() == null) {
+        if (seller.taxIdentifier().isEmpty()) {
             log.warn("Seller party has null taxIdentifier for invoice {} — violates Thai e-Tax "
                 + "specification; likely a legacy DB row predating parser enforcement",
                 entity.getId());
         }
-        if (buyer.taxIdentifier() == null) {
+        if (buyer.taxIdentifier().isEmpty()) {
             log.warn("Buyer party has null taxIdentifier for invoice {} — violates Thai e-Tax "
                 + "specification; likely a legacy DB row predating parser enforcement",
                 entity.getId());
@@ -133,8 +133,8 @@ public class ProcessedTaxInvoiceMapper {
         return TaxInvoicePartyEntity.builder()
             .partyType(partyType)
             .name(domain.name())
-            .taxId(domain.taxIdentifier() != null ? domain.taxIdentifier().value() : null)
-            .taxIdScheme(domain.taxIdentifier() != null ? domain.taxIdentifier().scheme() : null)
+            .taxId(domain.taxIdentifier().map(TaxIdentifier::value).orElse(null))
+            .taxIdScheme(domain.taxIdentifier().map(TaxIdentifier::scheme).orElse(null))
             .streetAddress(domain.address() != null ? domain.address().streetAddress() : null)
             .city(domain.address() != null ? domain.address().city() : null)
             .postalCode(domain.address() != null ? domain.address().postalCode() : null)
