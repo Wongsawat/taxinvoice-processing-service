@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -39,7 +38,6 @@ public class OutboxCleanupScheduler {
     private int retentionDays;
 
     @Scheduled(cron = "${app.outbox.cleanup.cron:0 0 2 * * *}")
-    @Transactional
     public void cleanPublishedEvents() {
         try {
             Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
