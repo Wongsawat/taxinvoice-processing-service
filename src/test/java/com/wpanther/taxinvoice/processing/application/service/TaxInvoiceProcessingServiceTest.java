@@ -377,7 +377,7 @@ class TaxInvoiceProcessingServiceTest {
      * is NOT a DuplicateKeyException, so it must:
      *  - skip the race-condition re-check entirely (no second findBySourceInvoiceId call)
      *  - publish FAILURE with "Constraint violation:" prefix
-     *  - increment processFailureCounter, not processConcurrentDuplicateCounter
+     *  - increment processFailureCounter, not processRaceConditionResolvedCounter
      *  - throw TaxInvoiceProcessingException immediately
      */
     @Test
@@ -416,7 +416,7 @@ class TaxInvoiceProcessingServiceTest {
      * different document) must be treated as a plain constraint violation:
      *  - no REQUIRES_NEW re-check
      *  - FAILURE reply with "Constraint violation:" prefix
-     *  - processFailureCounter incremented, processConcurrentDuplicateCounter NOT
+     *  - processFailureCounter incremented, processRaceConditionResolvedCounter NOT
      */
     @Test
     void testProcessInvoiceForSagaDuplicateKeyOnNonIdempotentConstraint() throws Exception {

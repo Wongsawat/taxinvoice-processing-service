@@ -48,7 +48,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
     private final Counter processSuccessCounter;
     private final Counter processFailureCounter;
     private final Counter processIdempotentCounter;
-    private final Counter processConcurrentDuplicateCounter;
+    private final Counter processRaceConditionResolvedCounter;
     private final Counter compensateSuccessCounter;
     private final Counter compensateIdempotentCounter;
     private final Counter compensateFailureCounter;
@@ -81,8 +81,8 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
         this.processIdempotentCounter = Counter.builder("taxinvoice.processing.idempotent")
             .description("Number of duplicate processing requests handled idempotently")
             .register(meterRegistry);
-        this.processConcurrentDuplicateCounter = Counter.builder("taxinvoice.processing.concurrent_duplicate")
-            .description("Number of DuplicateKeyExceptions resolved as concurrent duplicate inserts on source_invoice_id")
+        this.processRaceConditionResolvedCounter = Counter.builder("taxinvoice.processing.race_condition_resolved")
+            .description("Number of DuplicateKeyExceptions on source_invoice_id resolved as concurrent inserts — re-check confirmed the document was committed by another thread")
             .register(meterRegistry);
         this.compensateSuccessCounter = Counter.builder("taxinvoice.compensation.success")
             .description("Number of successful compensations")
@@ -146,7 +146,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                     // Concurrent thread committed the same document first; treat as idempotent success.
                     log.warn("Race condition resolved: document {} already committed by concurrent thread — replying SUCCESS",
                             documentId);
-                    processConcurrentDuplicateCounter.increment();
+                    processRaceConditionResolvedCounter.increment();
                     sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                 } else {
                     // source_invoice_id constraint fired but no record found — unexpected state.
