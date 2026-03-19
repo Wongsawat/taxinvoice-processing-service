@@ -377,16 +377,19 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseTaxInvoiceWithMissingSellerCountry() {
-        // Given: XML without seller country
+    void testParseTaxInvoiceWithMissingSellerCountry() throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Given: XML where seller PostalTradeAddress is present but CountryID is absent.
+        // Per the Thai e-Tax XSD, PostalTradeAddress.CountryID is optional, so the parser
+        // must accept the invoice and return a null address for the seller.
         String xmlContent = getTaxInvoiceXmlWithoutSellerCountry();
 
-        // When/Then: Should throw TaxInvoiceParsingException
-        TaxInvoiceParserPort.TaxInvoiceParsingException exception =
-            assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
-                () -> parserService.parse(xmlContent, "test-123"));
+        // When: Parsing the XML
+        ProcessedTaxInvoice invoice = parserService.parse(xmlContent, "test-123");
 
-        assertTrue(exception.getMessage().contains("Seller country"));
+        // Then: Parse succeeds; seller address is null because CountryID was absent
+        assertNotNull(invoice);
+        assertNull(invoice.getSeller().address(),
+            "Seller address should be null when CountryID is absent (optional per Thai e-Tax XSD)");
     }
 
     @Test
@@ -424,12 +427,19 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseTaxInvoiceWithMissingSellerAddress() {
+    void testParseTaxInvoiceWithMissingSellerAddress() throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+        // Given: XML where seller has no PostalTradeAddress element.
+        // Per the Thai e-Tax XSD, PostalTradeAddress is optional, so the parser must
+        // accept the invoice and return a null address for the seller.
         String xmlContent = getTaxInvoiceXmlWithoutSellerAddress();
-        TaxInvoiceParserPort.TaxInvoiceParsingException exception =
-            assertThrows(TaxInvoiceParserPort.TaxInvoiceParsingException.class,
-                () -> parserService.parse(xmlContent, "test-123"));
-        assertTrue(exception.getMessage().contains("address"));
+
+        // When: Parsing the XML
+        ProcessedTaxInvoice invoice = parserService.parse(xmlContent, "test-123");
+
+        // Then: Parse succeeds; seller address is null because PostalTradeAddress was absent
+        assertNotNull(invoice);
+        assertNull(invoice.getSeller().address(),
+            "Seller address should be null when PostalTradeAddress is absent (optional per Thai e-Tax XSD)");
     }
 
     @Test
@@ -1252,48 +1262,19 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     private String getTaxInvoiceXmlWithoutSellerCountry() {
-        return """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rsm:TaxInvoice_CrossIndustryInvoice
-                xmlns:rsm="urn:etda:uncefact:data:standard:TaxInvoice_CrossIndustryInvoice:2"
-                xmlns:ram="urn:etda:uncefact:data:standard:TaxInvoice_ReusableAggregateBusinessInformationEntity:2"
-                xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:16">
-              <rsm:ExchangedDocumentContext>
-                <ram:GuidelineSpecifiedDocumentContextParameter>
-                  <ram:ID>urn:etda.or.th:taxinvoice:2p1</ram:ID>
-                </ram:GuidelineSpecifiedDocumentContextParameter>
-              </rsm:ExchangedDocumentContext>
-              <rsm:ExchangedDocument>
-                <ram:ID>TV2025-00001</ram:ID>
-                <ram:TypeCode>388</ram:TypeCode>
-                <ram:IssueDateTime>2025-01-15T00:00:00</ram:IssueDateTime>
-              </rsm:ExchangedDocument>
-              <rsm:SupplyChainTradeTransaction>
-                <ram:ApplicableHeaderTradeAgreement>
-                  <ram:SellerTradeParty>
-                    <ram:Name>Test Seller</ram:Name>
-                    <ram:PostalTradeAddress>
-                    </ram:PostalTradeAddress>
-                    <ram:SpecifiedTaxRegistration>
-                      <ram:ID>1234567890123</ram:ID>
-                    </ram:SpecifiedTaxRegistration>
-                  </ram:SellerTradeParty>
-                  <ram:BuyerTradeParty>
-                    <ram:Name>Test Buyer</ram:Name>
-                    <ram:PostalTradeAddress>
-                      <ram:CountryID>TH</ram:CountryID>
-                    </ram:PostalTradeAddress>
-                    <ram:SpecifiedTaxRegistration>
-                      <ram:ID>9876543210987</ram:ID>
-                    </ram:SpecifiedTaxRegistration>
-                  </ram:BuyerTradeParty>
-                </ram:ApplicableHeaderTradeAgreement>
-                <ram:ApplicableHeaderTradeSettlement>
-                  <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
-                </ram:ApplicableHeaderTradeSettlement>
-              </rsm:SupplyChainTradeTransaction>
-            </rsm:TaxInvoice_CrossIndustryInvoice>
+        // Seller has PostalTradeAddress present but CountryID is absent.
+        // Uses buildXml so STANDARD_LINE_ITEM is included (required for a valid invoice).
+        String sellerNoCountry = """
+            <ram:SellerTradeParty>
+              <ram:Name>Test Seller</ram:Name>
+              <ram:PostalTradeAddress>
+              </ram:PostalTradeAddress>
+              <ram:SpecifiedTaxRegistration>
+                <ram:ID>1234567890123</ram:ID>
+              </ram:SpecifiedTaxRegistration>
+            </ram:SellerTradeParty>
             """;
+        return buildXml(standardExchangedDocument(), standardSupplyChain(sellerNoCountry));
     }
 
     private static final String NS_HEADER = """

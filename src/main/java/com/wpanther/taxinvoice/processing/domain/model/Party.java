@@ -12,7 +12,10 @@ import java.util.Objects;
  *   <li>{@code taxIdentifier} — required by Thai e-Tax specification; the XML parser
  *       always provides a non-null value. May be {@code null} only when a party is
  *       reconstructed from a legacy database row that predates the not-null constraint.</li>
- *   <li>{@code address} — same semantics as {@code taxIdentifier}.</li>
+ *   <li>{@code address} — {@code null} when the party's {@code PostalTradeAddress}
+ *       element is absent or has no {@code CountryID} in the source XML (both optional
+ *       per Thai e-Tax XSD), or when the party is reconstructed from a legacy database
+ *       row predating address enforcement. Check for {@code null} before accessing.</li>
  *   <li>{@code email} — genuinely optional; use {@link #hasEmail()} before accessing.</li>
  * </ul>
  */

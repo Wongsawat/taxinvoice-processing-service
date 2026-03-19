@@ -318,14 +318,20 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
     }
 
     /**
-     * Extract address from party
+     * Extract address from party.
+     *
+     * <p>Returns {@code null} when {@code PostalTradeAddress} is absent or its
+     * {@code CountryID} is missing — both are permitted by the Thai e-Tax XSD.
+     * Callers receive a null {@link Address} stored on the {@link Party}, which
+     * the persistence mapper also handles (V6 migration made {@code country} nullable).
      */
-    private Address extractAddress(TradePartyType jaxbParty, String partyType)
-            throws TaxInvoiceParserPort.TaxInvoiceParsingException {
+    private Address extractAddress(TradePartyType jaxbParty, String partyType) {
 
         TradeAddressType jaxbAddress = jaxbParty.getPostalTradeAddress();
         if (jaxbAddress == null) {
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(partyType + " address is missing");
+            log.warn("{} PostalTradeAddress element is absent — party address will be null "
+                + "(optional per Thai e-Tax XSD)", partyType);
+            return null;
         }
 
         // Build address (some fields may be optional)
@@ -346,7 +352,9 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             country = jaxbAddress.getCountryID().getValue().value();
         }
         if (country == null) {
-            throw new TaxInvoiceParserPort.TaxInvoiceParsingException(partyType + " country is missing");
+            log.warn("{} PostalTradeAddress present but CountryID is absent — party address will be null "
+                + "(optional per Thai e-Tax XSD)", partyType);
+            return null;
         }
 
         return Address.of(streetAddress, city, postalCode, country);
