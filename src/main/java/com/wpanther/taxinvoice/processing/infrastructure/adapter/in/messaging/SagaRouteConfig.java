@@ -29,7 +29,7 @@ public class SagaRouteConfig extends RouteBuilder {
     @Value("${app.kafka.topics.saga-compensation-tax-invoice}")
     private String sagaCompensationTopic;
 
-    @Value("${app.kafka.topics.dlq:taxinvoice.processing.dlq}")
+    @Value("${app.kafka.topics.dlq}")
     private String dlqTopic;
 
     @Value("${app.camel.retry.max-redeliveries:3}")
