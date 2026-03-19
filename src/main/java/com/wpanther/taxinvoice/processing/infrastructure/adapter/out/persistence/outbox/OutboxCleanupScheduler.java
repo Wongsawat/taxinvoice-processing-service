@@ -41,8 +41,12 @@ public class OutboxCleanupScheduler {
     @Scheduled(cron = "${app.outbox.cleanup.cron:0 0 2 * * *}")
     @Transactional
     public void cleanPublishedEvents() {
-        Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
-        int deleted = outboxEventRepository.deletePublishedBefore(cutoff);
-        log.info("Outbox cleanup: deleted {} published events older than {} days", deleted, retentionDays);
+        try {
+            Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
+            int deleted = outboxEventRepository.deletePublishedBefore(cutoff);
+            log.info("Outbox cleanup: deleted {} published events older than {} days", deleted, retentionDays);
+        } catch (Exception e) {
+            log.error("Outbox cleanup failed: {}", e.toString());
+        }
     }
 }
