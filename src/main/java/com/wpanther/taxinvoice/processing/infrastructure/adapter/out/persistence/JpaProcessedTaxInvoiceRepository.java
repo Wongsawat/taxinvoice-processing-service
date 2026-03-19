@@ -37,11 +37,6 @@ public interface JpaProcessedTaxInvoiceRepository extends JpaRepository<Processe
     Optional<ProcessedTaxInvoiceEntity> findBySourceInvoiceIdWithDetails(@Param("sourceInvoiceId") String sourceInvoiceId);
 
     /**
-     * Check if invoice number exists
-     */
-    boolean existsByInvoiceNumber(String invoiceNumber);
-
-    /**
      * Update only the mutable state fields (status, errorMessage, completedAt).
      * Used by save() on the update path to avoid loading the full entity.
      *

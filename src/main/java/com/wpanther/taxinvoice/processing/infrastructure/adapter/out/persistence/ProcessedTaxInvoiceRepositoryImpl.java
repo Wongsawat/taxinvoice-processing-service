@@ -84,12 +84,6 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public boolean existsByInvoiceNumber(String invoiceNumber) {
-        return jpaRepository.existsByInvoiceNumber(invoiceNumber);
-    }
-
-    @Override
     @Transactional
     public void deleteById(TaxInvoiceId id) {
         log.info("Deleting tax invoice with ID: {}", id);

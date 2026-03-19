@@ -39,11 +39,6 @@ public interface ProcessedTaxInvoiceRepository {
     Optional<ProcessedTaxInvoice> findBySourceInvoiceId(String sourceInvoiceId);
 
     /**
-     * Check if invoice number already exists
-     */
-    boolean existsByInvoiceNumber(String invoiceNumber);
-
-    /**
      * Delete invoice by ID
      */
     void deleteById(TaxInvoiceId id);

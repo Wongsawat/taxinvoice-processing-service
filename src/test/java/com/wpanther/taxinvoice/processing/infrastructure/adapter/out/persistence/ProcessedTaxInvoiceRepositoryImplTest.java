@@ -283,18 +283,6 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     }
 
     @Test
-    void testExistsByInvoiceNumber_whenExists() {
-        testInvoice.startProcessing();
-        ProcessedTaxInvoice saved = repository.save(testInvoice);
-        assertTrue(repository.existsByInvoiceNumber(saved.getInvoiceNumber()));
-    }
-
-    @Test
-    void testExistsByInvoiceNumber_whenNotExists() {
-        assertFalse(repository.existsByInvoiceNumber("NON-EXISTENT"));
-    }
-
-    @Test
     void testDeleteById() {
         testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
