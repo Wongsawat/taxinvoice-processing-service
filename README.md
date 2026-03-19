@@ -12,8 +12,6 @@ The Tax Invoice Processing Service is responsible for:
 - **Publishing** saga replies and notification events to downstream services
 - **Handling** compensation commands to rollback processing
 
-**Recent Changes**: This service has been migrated from event choreography to **Saga orchestration pattern**. The service now receives commands from a central orchestrator and sends replies, rather than directly initiating downstream services.
-
 ## Key Difference from Invoice Processing Service
 
 This service processes **tax invoices** (`TaxInvoice_CrossIndustryInvoice` XML type) while Invoice Processing Service processes regular invoices (`Invoice_CrossIndustryInvoice` XML type). Both use the teda library but with different JAXB packages:
@@ -24,14 +22,14 @@ This service processes **tax invoices** (`TaxInvoice_CrossIndustryInvoice` XML t
 
 ### Domain-Driven Design
 
-This service follows DDD principles with:
+This service follows DDD principles with hexagonal (ports and adapters) architecture:
 
 - **Aggregates**: `ProcessedTaxInvoice` (root)
 - **Value Objects**: `Money`, `Address`, `Party`, `LineItem`, `TaxIdentifier`
-- **Domain Services**: `TaxInvoiceParserService`
-- **Repositories**: `ProcessedTaxInvoiceRepository`
-- **Application Services**: `TaxInvoiceProcessingService`, `SagaCommandHandler`
-- **Infrastructure**: JPA entities, Spring Data repositories, Saga components
+- **Ports (in)**: `ProcessTaxInvoiceUseCase`, `CompensateTaxInvoiceUseCase`
+- **Ports (out)**: `ProcessedTaxInvoiceRepository`, `TaxInvoiceParserPort`, `SagaReplyPort`, `TaxInvoiceEventPublishingPort`
+- **Adapters (in)**: `SagaCommandHandler`, `SagaRouteConfig` (Camel routes)
+- **Adapters (out)**: `TaxInvoiceParserServiceImpl`, `ProcessedTaxInvoiceRepositoryImpl`, `SagaReplyPublisher`, `TaxInvoiceEventPublisher`
 
 ### Technology Stack
 
@@ -62,14 +60,30 @@ This pattern ensures:
 - Atomic consistency between domain state and events
 - Decoupling from external systems (Kafka)
 
+### XML Parsing Security
+
+The XML parser applies two safety guards before JAXB touches the payload:
+
+1. **Size limit**: Rejects payloads larger than 500 KB (UTF-8) to prevent memory exhaustion
+2. **Wall-clock timeout**: JAXB unmarshal runs in a virtual-thread executor; if parsing does not complete within `app.parsing.timeout-seconds` (default 10 s) the task is cancelled
+3. **XXE / XML-bomb prevention**: Secure SAX parser with DOCTYPE disallowed, external entities disabled, and `FEATURE_SECURE_PROCESSING` applied at both factory and XMLReader level
+4. **Concurrency cap**: A semaphore limits concurrent parses to `app.parsing.max-concurrent` (default 300) to prevent unbounded CPU contention under burst load
+
+### Idempotency and Race Conditions
+
+- **Pre-insert check**: `findBySourceInvoiceId` before processing detects duplicate commands
+- **Partial-failure resume**: Invoices found in `PROCESSING` state are completed without re-parsing
+- **Race-condition detection**: Concurrent inserts on `source_invoice_id` are detected via `SQLState 23505` + constraint name, then resolved by re-checking in a `REQUIRES_NEW` transaction
+- **All timestamps stored in UTC**: `createdAt` and `completedAt` use `LocalDateTime.now(ZoneOffset.UTC)`
+
 ## Database Schema
 
 ### Tables
 
-1. **processed_tax_invoices** - Main tax invoice data
-2. **tax_invoice_parties** - Seller and buyer information
-3. **tax_invoice_line_items** - Tax invoice line items with quantities and prices
-4. **outbox_events** - Transactional outbox for reliable event delivery
+1. **processed_tax_invoices** — Main tax invoice data (optimistic locking via `version` column)
+2. **tax_invoice_parties** — Seller and buyer information (`country` nullable per Thai e-Tax XSD)
+3. **tax_invoice_line_items** — Tax invoice line items with quantities and prices
+4. **outbox_events** — Transient Debezium CDC relay (not the compliance store; pruned after 7 days)
 
 ## Kafka Integration
 
@@ -93,7 +107,7 @@ All Kafka integration is handled via Apache Camel routes defined in `SagaRouteCo
 
 Failed saga commands are routed to a Dead Letter Queue after 3 retries with exponential backoff:
 - **DLQ Topic**: `taxinvoice.processing.dlq`
-- **Retry Policy**: 1s initial delay, 2x multiplier, max 10s delay
+- **Retry Policy**: 1 s initial delay, 2× multiplier, max 10 s delay
 
 ## Configuration
 
@@ -104,10 +118,20 @@ Failed saga commands are routed to a Dead Letter Queue after 3 retries with expo
 | `DB_HOST` | PostgreSQL host | `localhost` |
 | `DB_PORT` | PostgreSQL port | `5432` |
 | `DB_NAME` | Database name | `taxinvoiceprocess_db` |
-| `DB_USERNAME` | Database username | `postgres` |
-| `DB_PASSWORD` | Database password | `postgres` |
+| `DB_USERNAME` | Database username | *(required — no default in production)* |
+| `DB_PASSWORD` | Database password | *(required — no default in production)* |
 | `KAFKA_BROKERS` | Kafka bootstrap servers | `localhost:9092` |
 | `EUREKA_URL` | Eureka server URL | `http://localhost:8761/eureka/` |
+
+### Application Properties
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `app.parsing.timeout-seconds` | Maximum wall-clock time for XML unmarshal per message | `10` |
+| `app.parsing.max-concurrent` | Semaphore cap on concurrent JAXB unmarshal tasks | `300` |
+| `app.tax-invoice.default-due-date-days` | Days added to issue date when XML omits a due date | `30` |
+| `app.outbox.cleanup.retention-days` | Days to retain published outbox events before deletion | `7` |
+| `app.outbox.cleanup.cron` | Cron schedule for outbox cleanup job | `0 0 2 * * *` |
 
 ### Kafka Topics
 
@@ -143,15 +167,13 @@ mvn clean package
 ### Run Locally
 
 ```bash
-# Set environment variables
 export DB_HOST=localhost
 export DB_PORT=5432
 export DB_NAME=taxinvoiceprocess_db
-export DB_USERNAME=postgres
+export DB_USERNAME=your_username
 export DB_PASSWORD=your_password
 export KAFKA_BROKERS=localhost:9092
 
-# Run application
 mvn spring-boot:run
 ```
 
@@ -161,13 +183,14 @@ mvn spring-boot:run
 # Build image
 docker build -t taxinvoice-processing-service:latest .
 
-# Run container
+# Run container (TZ=Asia/Bangkok required for correct cron scheduling)
 docker run -p 8088:8088 \
+  -e TZ=Asia/Bangkok \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
   -e DB_NAME=taxinvoiceprocess_db \
-  -e DB_USERNAME=postgres \
-  -e DB_PASSWORD=postgres \
+  -e DB_USERNAME=your_username \
+  -e DB_PASSWORD=your_password \
   -e KAFKA_BROKERS=kafka:29092 \
   taxinvoice-processing-service:latest
 ```
@@ -176,22 +199,10 @@ docker run -p 8088:8088 \
 
 This service is event-driven with no REST API endpoints. Only Spring Boot Actuator endpoints are available:
 
-### Health Check
-
 ```bash
 GET http://localhost:8088/actuator/health
-```
-
-### Metrics
-
-```bash
 GET http://localhost:8088/actuator/metrics
 GET http://localhost:8088/actuator/prometheus
-```
-
-### Camel Routes Monitoring
-
-```bash
 GET http://localhost:8088/actuator/camelroutes
 ```
 
@@ -203,17 +214,19 @@ GET http://localhost:8088/actuator/camelroutes
 src/main/java/com/wpanther/taxinvoice/processing/
 ├── TaxInvoiceProcessingServiceApplication.java
 ├── domain/
-│   ├── model/              # Domain models (aggregates, value objects)
-│   ├── repository/         # Repository interfaces
-│   ├── service/            # Domain services
-│   └── event/              # Integration events
+│   ├── model/                  # Aggregate root (ProcessedTaxInvoice), value objects
+│   ├── port/out/               # Repository and parser interfaces
+│   └── event/                  # Domain events
 ├── application/
-│   └── service/            # Application services
+│   ├── port/in/                # Use case interfaces (process, compensate)
+│   ├── port/out/               # Saga reply and event publishing interfaces
+│   └── service/                # TaxInvoiceProcessingService
 └── infrastructure/
-    ├── persistence/        # JPA entities, repositories
-    ├── messaging/          # EventPublisher, SagaReplyPublisher
-    ├── service/            # TaxInvoiceParserServiceImpl
-    └── config/             # Spring configuration, Camel routes
+    ├── adapter/in/messaging/   # SagaCommandHandler, SagaRouteConfig (Camel), DTOs
+    ├── adapter/out/messaging/  # SagaReplyPublisher, TaxInvoiceEventPublisher, HeaderSerializer
+    ├── adapter/out/parsing/    # TaxInvoiceParserServiceImpl (JAXB + security guards)
+    ├── adapter/out/persistence/ # JPA entities, mapper, repositories, OutboxCleanupScheduler
+    └── config/                 # KafkaTopicsProperties
 ```
 
 ### Database Migrations
@@ -221,48 +234,49 @@ src/main/java/com/wpanther/taxinvoice/processing/
 Flyway migrations are located in `src/main/resources/db/migration/`.
 
 ```bash
-# Run migrations
 mvn flyway:migrate
-
-# Check migration status
 mvn flyway:info
 ```
 
 ## Integration with teda Library
 
-This service uses the Thai e-Tax Invoice library (teda v1.0.0) for:
-- XML parsing and validation
-- JAXB class generation
-- Database-backed code lists
+This service uses the Thai e-Tax Invoice library (teda v1.0.0) for XML parsing and validation.
 
 **CRITICAL**: The service expects XML documents with `TaxInvoice_CrossIndustryInvoice` root element and uses `taxinvoice` JAXB packages:
 - `com.wpanther.etax.generated.taxinvoice.rsm.impl`
 - `com.wpanther.etax.generated.taxinvoice.ram.impl`
+- `com.wpanther.etax.generated.common.qdt.impl`
+- `com.wpanther.etax.generated.common.udt.impl`
 
 ## Monitoring
 
-### Metrics
+### Custom Business Metrics (Prometheus)
 
-The service exposes Prometheus metrics at `/actuator/prometheus`:
-- `camel.*` - Apache Camel route metrics
-- `jvm_memory_used_bytes` - JVM memory usage
-- Custom business metrics
+| Metric | Description |
+|--------|-------------|
+| `taxinvoice.processing.success` | Successfully processed invoices |
+| `taxinvoice.processing.failure` | Failed processing attempts |
+| `taxinvoice.processing.idempotent` | Duplicate commands handled idempotently |
+| `taxinvoice.processing.race_condition_resolved` | Concurrent inserts resolved via REQUIRES_NEW re-check |
+| `taxinvoice.processing.duration` | End-to-end processing time (timer) |
+| `taxinvoice.compensation.success` | Successful compensations |
+| `taxinvoice.compensation.idempotent` | Duplicate compensation commands (already deleted) |
+| `taxinvoice.compensation.failure` | Failed compensation attempts |
+| `outbox.cleanup.failure` | Outbox cleanup job failures (sustained non-zero = table growing unbounded) |
+
+All metrics are exposed at `/actuator/prometheus` and tagged with `application=taxinvoice-processing-service`.
 
 ### Logging
 
-Structured logging is configured for:
-- Application events
-- Apache Camel route processing
-- Kafka message exchange
-- Database operations
-- Error tracking
+Structured logging is configured for application events, Camel route processing, Kafka message exchange, database operations, and error tracking. Enable SQL logging with the `dev` profile:
+
+```bash
+mvn spring-boot:run -Dspring.profiles.active=dev
+```
 
 ## Testing
 
-This service has **263 tests** in total:
-- **257 unit tests** - Framework-independent tests with mocked dependencies
-- **7 Saga consumer integration tests** - End-to-end tests through Apache Camel routes
-- **6 CDC (Debezium) integration tests** - Outbox pattern event delivery verification
+This service has **321 unit tests** (integration tests excluded by default).
 
 ### Unit Tests
 
@@ -304,7 +318,7 @@ mvn test -Pintegration -Dtest=TaxInvoiceCdcIntegrationTest
 mvn test -Pintegration
 ```
 
-**Note**: See [docs/INTEGRATION_TESTS.md](docs/INTEGRATION_TESTS.md) for detailed integration test documentation including architecture, test descriptions, and troubleshooting.
+See [docs/INTEGRATION_TESTS.md](docs/INTEGRATION_TESTS.md) for detailed integration test documentation.
 
 ### Coverage
 
@@ -312,7 +326,7 @@ mvn test -Pintegration
 mvn verify
 ```
 
-JaCoCo enforces 80% line coverage per package. The build will fail if coverage is below threshold.
+JaCoCo enforces **85% line coverage** per package. The build fails if coverage falls below this threshold.
 
 ## Event Flow
 
@@ -324,22 +338,20 @@ saga.command.tax-invoice
         │
         ▼
 ┌──────────────────────────────────┐
-│  Tax Invoice Processing     │
-│  Service                  │
-│  (Apache Camel Routes)      │
-└───────────┬────────────────────┘
-            │
-            ▼
-    Parse XML → Validate → Save to DB
+│  Tax Invoice Processing Service  │
+│  (Apache Camel Routes)           │
+│                                  │
+│  Parse XML → Validate → Save DB  │
+└───────────┬──────────────────────┘
             │
             ▼
 ┌──────────────────────────────────┐
-│  Outbox Table (Transactional) │
-└───────────┬────────────────────┘
-            │
+│  outbox_events (Transactional)   │
+└───────────┬──────────────────────┘
+            │  Debezium CDC
             ▼
-        saga.reply.tax-invoice ─────► Orchestrator
-        taxinvoice.processed ─────► Notification Service
+saga.reply.tax-invoice ──────────► Orchestrator
+taxinvoice.processed ────────────► Notification Service
 ```
 
 ## License
