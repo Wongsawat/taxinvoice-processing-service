@@ -21,13 +21,15 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests verifying transaction propagation behaviour of SagaReplyPublisher.
  *
- * <p>publishFailure() and publishCompensated() are called from error-handling branches where the
- * outer transaction is either ROLLBACK_ONLY (DataIntegrityViolationException) or has already had
- * its Hibernate session invalidated by a DB-level error. They must commit their outbox entries in
- * an independent transaction so the orchestrator always receives a reply and the saga never hangs.
+ * <p>publishFailure() uses REQUIRES_NEW — it is called from the catch block after an exception
+ * has marked the outer transaction ROLLBACK_ONLY, so it must commit its outbox entry in an
+ * independent transaction to guarantee the orchestrator always receives a FAILURE reply.
  *
- * <p>publishSuccess() must remain atomic with the domain state change, so it continues to use
- * MANDATORY propagation and commits together with the outer transaction.
+ * <p>publishSuccess() and publishCompensated() use MANDATORY — both are called only on the
+ * happy path where the outer transaction is active and healthy. Their outbox entries must be
+ * atomic with the domain state change: if the outer transaction rolls back (e.g. a transient
+ * error after the publish call), the reply must also be rolled back to prevent the orchestrator
+ * acting on a reply whose corresponding domain state was never committed.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -107,20 +109,42 @@ class SagaReplyPublisherTransactionTest {
     }
 
     // -------------------------------------------------------------------------
-    // publishCompensated — must survive an outer ROLLBACK_ONLY transaction
-    // (called from the catch block in compensate() when a DB error occurred)
+    // publishCompensated — MANDATORY: atomic with the outer business transaction
+    // (called only on the happy path in compensate(), never from a catch block)
     // -------------------------------------------------------------------------
 
     @Test
-    void publishCompensated_commitsOutboxEntry_evenWhenOuterTransactionIsRollbackOnly() {
+    void publishCompensated_commitsOutboxEntry_togetherWithOuterTransaction() {
         String sagaId = UUID.randomUUID().toString();
         TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
 
+        // publishCompensated is called only on the happy path, within an active transaction.
+        txTemplate.execute(status -> {
+            sagaReplyPublisher.publishCompensated(
+                    sagaId, SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+            return null;
+        });
+
+        List<OutboxEventEntity> entries = outboxRepository.findAll().stream()
+                .filter(e -> e.getAggregateId().equals(sagaId))
+                .toList();
+
+        assertFalse(entries.isEmpty(),
+                "publishCompensated() outbox entry must be committed with the outer transaction");
+    }
+
+    @Test
+    void publishCompensated_rollsBackOutboxEntry_whenOuterTransactionRollsBack() {
+        String sagaId = UUID.randomUUID().toString();
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+
+        // If the outer transaction rolls back after publishCompensated(), the reply must also
+        // roll back — the domain delete and the reply must be atomic.
         try {
             txTemplate.execute(status -> {
-                status.setRollbackOnly();
                 sagaReplyPublisher.publishCompensated(
                         sagaId, SagaStep.PROCESS_TAX_INVOICE, "corr-1");
+                status.setRollbackOnly(); // simulate something failing after the publish call
                 return null;
             });
         } catch (UnexpectedRollbackException | TransactionSystemException ignored) {
@@ -131,10 +155,9 @@ class SagaReplyPublisherTransactionTest {
                 .filter(e -> e.getAggregateId().equals(sagaId))
                 .toList();
 
-        assertFalse(entries.isEmpty(),
-                "publishCompensated() must commit its outbox entry in its own transaction " +
-                "so the orchestrator receives a COMPENSATED reply even when the outer " +
-                "transaction is rolled back");
+        assertTrue(entries.isEmpty(),
+                "publishCompensated() outbox entry must be rolled back together with the outer " +
+                "transaction — a premature COMPENSATED reply must never be delivered");
     }
 
     // -------------------------------------------------------------------------

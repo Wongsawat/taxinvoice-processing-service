@@ -82,7 +82,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
         TaxInvoiceReplyEvent reply = TaxInvoiceReplyEvent.compensated(sagaId, sagaStep, correlationId);
 
