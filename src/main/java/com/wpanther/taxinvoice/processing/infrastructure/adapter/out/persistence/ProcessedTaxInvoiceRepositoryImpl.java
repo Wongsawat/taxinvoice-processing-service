@@ -32,17 +32,21 @@ public class ProcessedTaxInvoiceRepositoryImpl implements ProcessedTaxInvoiceRep
         UUID id = invoice.getId().value();
 
         ProcessedTaxInvoice result;
-        if (jpaRepository.existsById(id)) {
-            // Entity exists — update only mutable fields via direct UPDATE,
-            // avoiding a full SELECT + dirty-check cycle on every state transition.
-            jpaRepository.updateStatusFields(
-                id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getCompletedAt());
-            result = invoice;
-        } else {
+        // PROCESSING is the first status ever persisted: the service always calls
+        // startProcessing() before the initial save(), so PENDING is never committed
+        // to the database. Use this as a zero-cost insert/update discriminator,
+        // eliminating the existsById SELECT that would otherwise be needed on every call.
+        if (invoice.getStatus() == ProcessingStatus.PROCESSING) {
             // New entity — full mapping. Map the saved entity back to domain so
             // server-side fields (@CreationTimestamp, @Version) are reflected.
             ProcessedTaxInvoiceEntity saved = jpaRepository.save(mapper.toEntity(invoice));
             result = mapper.toDomain(saved);
+        } else {
+            // Existing entity — update only mutable fields via direct UPDATE,
+            // avoiding a full SELECT + dirty-check cycle on every state transition.
+            jpaRepository.updateStatusFields(
+                id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getCompletedAt());
+            result = invoice;
         }
 
         log.info("Saved processed tax invoice: {} with ID: {}", invoice.getInvoiceNumber(), id);

@@ -70,6 +70,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     @Test
     void testSaveAndFindById() {
         // When
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         Optional<ProcessedTaxInvoice> found = repository.findById(saved.getId());
 
@@ -95,6 +96,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     @Test
     void testFindBySourceInvoiceId() {
         // Given
+        testInvoice.startProcessing();
         repository.save(testInvoice);
 
         // When
@@ -117,11 +119,12 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testFindByStatus() {
-        // Given
+        // Given — PROCESSING is the first persisted status (service never saves PENDING)
+        testInvoice.startProcessing();
         repository.save(testInvoice);
 
         // When
-        List<ProcessedTaxInvoice> found = repository.findByStatus(ProcessingStatus.PENDING);
+        List<ProcessedTaxInvoice> found = repository.findByStatus(ProcessingStatus.PROCESSING);
 
         // Then
         assertFalse(found.isEmpty());
@@ -140,6 +143,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
     @Test
     void testSavePreservesAllFields() {
         // When
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         Optional<ProcessedTaxInvoice> found = repository.findById(saved.getId());
 
@@ -202,6 +206,8 @@ class ProcessedTaxInvoiceRepositoryImplTest {
             .build();
 
         // When
+        testInvoice.startProcessing();
+        invoice2.startProcessing();
         repository.save(testInvoice);
         repository.save(invoice2);
 
@@ -230,11 +236,13 @@ class ProcessedTaxInvoiceRepositoryImplTest {
             .originalXml("<xml>test2</xml>")
             .build();
 
+        testInvoice.startProcessing();
+        invoice2.startProcessing();
         repository.save(testInvoice);
         repository.save(invoice2);
 
         // When
-        List<ProcessedTaxInvoice> found = repository.findByStatus(ProcessingStatus.PENDING);
+        List<ProcessedTaxInvoice> found = repository.findByStatus(ProcessingStatus.PROCESSING);
 
         // Then
         assertEquals(2, found.size());
@@ -261,6 +269,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testFindByInvoiceNumber_found() {
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         Optional<ProcessedTaxInvoice> found = repository.findByInvoiceNumber(saved.getInvoiceNumber());
         assertTrue(found.isPresent());
@@ -275,6 +284,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testExistsByInvoiceNumber_whenExists() {
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         assertTrue(repository.existsByInvoiceNumber(saved.getInvoiceNumber()));
     }
@@ -286,6 +296,7 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testDeleteById() {
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         repository.deleteById(saved.getId());
         assertFalse(repository.findById(saved.getId()).isPresent());
@@ -296,22 +307,17 @@ class ProcessedTaxInvoiceRepositoryImplTest {
 
     @Test
     void testUpdateStatusFields_incrementsVersion() {
-        // Given: a freshly inserted entity has version = 0
+        // Given: PROCESSING is the first persisted status; INSERT gives version = 0
+        testInvoice.startProcessing();
         ProcessedTaxInvoice saved = repository.save(testInvoice);
         UUID id = saved.getId().value();
         assertEquals(0L, jpaRepository.findById(id).orElseThrow().getVersion(),
             "Version must be 0 after initial INSERT");
 
-        // When: first status update (PENDING → PROCESSING)
-        saved.startProcessing();
-        repository.save(saved);
-        assertEquals(1L, jpaRepository.findById(id).orElseThrow().getVersion(),
-            "Version must be 1 after first updateStatusFields call");
-
-        // When: second status update (PROCESSING → COMPLETED)
+        // When: status update (PROCESSING → COMPLETED) via updateStatusFields
         saved.markCompleted();
         repository.save(saved);
-        assertEquals(2L, jpaRepository.findById(id).orElseThrow().getVersion(),
-            "Version must be 2 after second updateStatusFields call");
+        assertEquals(1L, jpaRepository.findById(id).orElseThrow().getVersion(),
+            "Version must be 1 after updateStatusFields call");
     }
 }
