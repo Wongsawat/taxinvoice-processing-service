@@ -1,11 +1,20 @@
 package com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence;
 
-import com.wpanther.taxinvoice.processing.domain.model.*;
+import com.wpanther.taxinvoice.processing.domain.model.Address;
+import com.wpanther.taxinvoice.processing.domain.model.LineItem;
+import com.wpanther.taxinvoice.processing.domain.model.Money;
+import com.wpanther.taxinvoice.processing.domain.model.Party;
+import com.wpanther.taxinvoice.processing.domain.model.ProcessedTaxInvoice;
+import com.wpanther.taxinvoice.processing.domain.model.TaxIdentifier;
+import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.out.persistence.TaxInvoicePartyEntity.PartyType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Mapper between domain model and JPA entities
