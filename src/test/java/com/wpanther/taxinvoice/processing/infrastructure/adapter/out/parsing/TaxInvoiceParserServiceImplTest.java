@@ -1735,19 +1735,71 @@ class TaxInvoiceParserServiceImplTest {
     }
 
     // -----------------------------------------------------------------------
+    // Semaphore lifecycle — permit must be released even when submit() throws
+    // -----------------------------------------------------------------------
+
+    /**
+     * Regression test for the semaphore leak on RejectedExecutionException.
+     *
+     * <p>The semaphore acquire and the finally-release must be in the same try block
+     * so that a RejectedExecutionException from a shut-down executor (e.g. after
+     * @PreDestroy runs while a parse is in-flight) cannot strand a permit.
+     *
+     * <p>Strategy: construct a parser with maxConcurrentParses=1, shut its executor
+     * down before calling parse(), and verify that the permit is returned so that a
+     * second call is not permanently blocked.  The first call will throw a
+     * TaxInvoiceParsingException (wrapping RejectedExecutionException); the second
+     * call must be accepted (not deadlocked on semaphore acquisition).
+     */
+    @Test
+    void testSemaphoreIsReleasedWhenExecutorRejectsSubmit() {
+        // maxConcurrentParses=1 so one leaked permit exhausts the semaphore entirely.
+        TaxInvoiceParserServiceImpl singlePermitParser =
+            new TaxInvoiceParserServiceImpl(5, TimeUnit.SECONDS, 30, 1);
+
+        // Shut the executor down before submitting — guarantees RejectedExecutionException.
+        singlePermitParser.shutdownExecutor();
+
+        String xml = getSampleTaxInvoiceXml();
+
+        // First call: executor is shut down → submit() throws RejectedExecutionException.
+        // The semaphore permit must be released inside the finally block.
+        assertThrows(
+            TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+            () -> singlePermitParser.parse(xml, "leak-test-1"),
+            "parse() must throw when executor is shut down"
+        );
+
+        // Second call: if the permit leaked, tryAcquire would time out and parse()
+        // would block (or the semaphore would immediately throw).  A successful throw
+        // of TaxInvoiceParsingException (not a hang) proves the permit was returned.
+        assertThrows(
+            TaxInvoiceParserPort.TaxInvoiceParsingException.class,
+            () -> singlePermitParser.parse(xml, "leak-test-2"),
+            "parse() must still throw (not deadlock) after first rejected submit"
+        );
+    }
+
+    // -----------------------------------------------------------------------
     // Timezone-safety tests for convertXMLGregorianCalendarToLocalDate
     // -----------------------------------------------------------------------
 
     /**
      * Regression test for the JVM-timezone bug.
      *
-     * When a Thai e-Tax XML omits the timezone offset, the naive timestamp must be
-     * treated as Asia/Bangkok time. With a UTC JVM (Docker default), the old code
-     * interpreted the naive value as UTC; a Bangkok-midnight event like 2025-01-01
-     * stored as "2024-12-31T17:30:00" (no TZ) would then be mis-dated as 2024-12-31
-     * instead of the correct Thai date 2025-01-01.
+     * Per the ETDA Thai e-Tax specification, naive datetimes (no timezone offset) represent
+     * Bangkok local time — the sample files in the spec use bare datetime format while UTC
+     * documents carry an explicit Z suffix. The parser must therefore treat a bare timestamp
+     * as Bangkok local and return its date fields unchanged, regardless of the JVM timezone.
      *
-     * This test pins the JVM to UTC to reproduce the exact Docker scenario.
+     * The previous implementation used {@code toGregorianCalendar().toZonedDateTime()},
+     * which assigns the JVM default timezone to a naive value. On a UTC JVM, a late-evening
+     * Bangkok datetime like {@code "2025-01-01T23:30:00"} (naive, meaning 11:30 pm Bangkok
+     * on Jan 1) would be interpreted as UTC 23:30, then shifted +7 h to Bangkok giving
+     * {@code 2025-01-02} — an off-by-one error that would mis-date the invoice on any CI
+     * server or developer machine running at UTC.
+     *
+     * This test pins the JVM to UTC to reproduce that scenario.
      */
     @Test
     void testParseDateTimezone_naiveTimestamp_utcJvm_yieldsCorrectThaiDate()
@@ -1756,14 +1808,15 @@ class TaxInvoiceParserServiceImplTest {
         try {
             TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
-            // 2024-12-31T17:30:00 naive = UTC 17:30 = Bangkok 2025-01-01T00:30:00+07:00
-            // Old code (JVM=UTC) returned 2024-12-31 — a compliance-breaking off-by-one.
-            String xml = getTaxInvoiceXmlWithIssueDateTime("2024-12-31T17:30:00");
+            // 2025-01-01T23:30:00 naive = Bangkok local 23:30 on Jan 1 → date must be 2025-01-01.
+            // Old code on a UTC JVM: treated as UTC 23:30 → Bangkok 2025-01-02T06:30+07:00 → 2025-01-02 (WRONG).
+            // New code: extracts year/month/day directly → 2025-01-01 (CORRECT).
+            String xml = getTaxInvoiceXmlWithIssueDateTime("2025-01-01T23:30:00");
 
             ProcessedTaxInvoice invoice = parserService.parse(xml, "tz-test-naive-utc");
 
             assertEquals(LocalDate.of(2025, 1, 1), invoice.getIssueDate(),
-                "Naive UTC datetime 2024-12-31T17:30:00 represents Bangkok 2025-01-01 and must be stored as such");
+                "Naive Bangkok datetime 2025-01-01T23:30:00 must be stored as 2025-01-01 on any JVM timezone");
         } finally {
             TimeZone.setDefault(savedDefault);
         }

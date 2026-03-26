@@ -297,25 +297,39 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
             throw TaxInvoiceParserPort.TaxInvoiceParsingException.forInterrupted();
         }
 
-        Future<TaxInvoice_CrossIndustryInvoiceType> future =
-            parseExecutor.submit(() -> doUnmarshal(xmlContent));
-
+        // The outer try/finally wraps submit() as well as future.get().
+        // If submit() itself throws (e.g. RejectedExecutionException after @PreDestroy
+        // shuts the executor down while a parse is in-flight), the permit is still
+        // released — preventing a semaphore leak that would make the service permanently
+        // unresponsive after maxConcurrentParses (300) such failures.
+        //
+        // RejectedExecutionException from submit() is unchecked and not wrapped by the
+        // inner ExecutionException catch, so it is caught here and surfaced as a
+        // TaxInvoiceParsingException to keep the port contract consistent.
         try {
-            return future.get(parseTimeoutMs, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            future.cancel(true);
-            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forTimeout(parseTimeoutMs);
-        } catch (ExecutionException e) {
-            future.cancel(true);
-            Throwable cause = e.getCause();
-            if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException ex) {
-                throw ex;
+            Future<TaxInvoice_CrossIndustryInvoiceType> future;
+            try {
+                future = parseExecutor.submit(() -> doUnmarshal(xmlContent));
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                throw TaxInvoiceParserPort.TaxInvoiceParsingException.forUnmarshal(e);
             }
-            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forUnmarshal(cause);
-        } catch (InterruptedException e) {
-            future.cancel(true);
-            Thread.currentThread().interrupt();
-            throw TaxInvoiceParserPort.TaxInvoiceParsingException.forInterrupted();
+            try {
+                return future.get(parseTimeoutMs, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                throw TaxInvoiceParserPort.TaxInvoiceParsingException.forTimeout(parseTimeoutMs);
+            } catch (ExecutionException e) {
+                future.cancel(true);
+                Throwable cause = e.getCause();
+                if (cause instanceof TaxInvoiceParserPort.TaxInvoiceParsingException ex) {
+                    throw ex;
+                }
+                throw TaxInvoiceParserPort.TaxInvoiceParsingException.forUnmarshal(cause);
+            } catch (InterruptedException e) {
+                future.cancel(true);
+                Thread.currentThread().interrupt();
+                throw TaxInvoiceParserPort.TaxInvoiceParsingException.forInterrupted();
+            }
         } finally {
             parseSemaphore.release();
         }
@@ -606,17 +620,37 @@ public class TaxInvoiceParserServiceImpl implements TaxInvoiceParserPort {
 
     /**
      * Convert XMLGregorianCalendar to LocalDate using Thai timezone (UTC+7).
-     * When the XML omits the timezone offset (DatatypeConstants.FIELD_UNDEFINED),
-     * the timestamp is interpreted as Asia/Bangkok time — matching the Thai e-Tax standard.
-     * Without this, a JVM running at UTC would misparse a late-evening Thai datetime
-     * (e.g. 2025-01-01T23:30:00 without offset) as the previous calendar day.
+     *
+     * <p>Two cases:
+     * <ol>
+     *   <li><b>Timezone undefined</b> ({@link DatatypeConstants#FIELD_UNDEFINED}) — the XML
+     *       contains a bare datetime with no offset, e.g. {@code 2025-01-01T23:30:00}.
+     *       Per the ETDA Thai e-Tax standard, bare datetimes represent Bangkok local time
+     *       (the sample files in the specification use this format, while UTC datetimes carry
+     *       an explicit {@code Z} suffix).  The calendar fields are therefore extracted
+     *       directly — no timezone conversion is performed.
+     *
+     *       <p><b>Why not {@code toGregorianCalendar().toZonedDateTime()}?</b>
+     *       {@code toGregorianCalendar()} assigns the <em>JVM default timezone</em> when the
+     *       calendar has no timezone.  On a UTC JVM {@code "2025-01-01T23:30:00"} (naive
+     *       Bangkok local) would become {@code "2025-01-01T23:30:00Z"}, and a subsequent
+     *       {@code withZoneSameInstant(TH_ZONE)} would advance the instant to
+     *       {@code "2025-01-02T06:30:00+07:00"} — an off-by-one error for any late-evening
+     *       Thai datetime on any non-Bangkok JVM.</li>
+     *   <li><b>Timezone present</b> — normalise the absolute instant to Bangkok time and
+     *       extract the local date.  This handles documents authored in a different offset
+     *       (e.g. UTC with explicit {@code Z}) and returns the Thai calendar day.</li>
+     * </ol>
      */
     private LocalDate convertXMLGregorianCalendarToLocalDate(XMLGregorianCalendar calendar) {
-        ZoneId zone = (calendar.getTimezone() == DatatypeConstants.FIELD_UNDEFINED)
-            ? TH_ZONE
-            : calendar.toGregorianCalendar().getTimeZone().toZoneId();
+        if (calendar.getTimezone() == DatatypeConstants.FIELD_UNDEFINED) {
+            // Bare datetime → Bangkok local time; extract date fields directly.
+            // getYear()/getMonth()/getDay() return the literal XML values with no conversion,
+            // so the result is correct on any JVM regardless of the default timezone.
+            return LocalDate.of(calendar.getYear(), calendar.getMonth(), calendar.getDay());
+        }
         return calendar.toGregorianCalendar().toZonedDateTime()
-            .withZoneSameInstant(zone)
+            .withZoneSameInstant(TH_ZONE)
             .toLocalDate();
     }
 }
