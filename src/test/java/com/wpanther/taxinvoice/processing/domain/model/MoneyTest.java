@@ -108,10 +108,10 @@ class MoneyTest {
     }
 
     @Test
-    void testMultiplyByDouble() {
+    void testMultiplyByDecimalFactor() {
         // Given
         Money money = Money.of(new BigDecimal("100.00"), "THB");
-        double factor = 2.5;
+        BigDecimal factor = new BigDecimal("2.5");
 
         // When
         Money result = money.multiply(factor);
