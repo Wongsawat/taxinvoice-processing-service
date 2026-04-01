@@ -6,13 +6,10 @@ import com.wpanther.saga.domain.outbox.OutboxStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
 @RequiredArgsConstructor
 @Slf4j
 public class JpaOutboxEventRepository implements OutboxEventRepository {
