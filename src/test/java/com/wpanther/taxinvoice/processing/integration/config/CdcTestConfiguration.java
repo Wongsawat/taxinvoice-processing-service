@@ -2,10 +2,12 @@ package com.wpanther.taxinvoice.processing.integration.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.wpanther.taxinvoice.processing.infrastructure.config.KafkaTopicsProperties;
 import org.apache.camel.spring.boot.CamelAutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -20,6 +22,7 @@ import javax.sql.DataSource;
 
 @Configuration
 @Profile("cdc-test")
+@EnableConfigurationProperties(KafkaTopicsProperties.class)
 @EnableAutoConfiguration(exclude = {
     CamelAutoConfiguration.class,
     KafkaAutoConfiguration.class
@@ -32,6 +35,7 @@ import javax.sql.DataSource;
         "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.messaging",
         "com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging",
         "com.wpanther.taxinvoice.processing.infrastructure.adapter.out.parsing",
+        "com.wpanther.taxinvoice.processing.infrastructure.config",
         "com.wpanther.saga.infrastructure"
     },
     excludeFilters = @ComponentScan.Filter(
