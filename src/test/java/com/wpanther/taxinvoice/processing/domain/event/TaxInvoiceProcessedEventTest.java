@@ -16,8 +16,8 @@ class TaxInvoiceProcessedEventTest {
     @Test
     void testCreateEvent() {
         // Given
-        String invoiceId = "taxinvoice-123";
-        String invoiceNumber = "TXN-001";
+        String documentId = "taxinvoice-123";
+        String documentNumber = "TXN-001";
         BigDecimal total = new BigDecimal("10000.00");
         String currency = "THB";
         String sagaId = "saga-123";
@@ -25,13 +25,13 @@ class TaxInvoiceProcessedEventTest {
 
         // When
         TaxInvoiceProcessedEvent event = new TaxInvoiceProcessedEvent(
-            invoiceId, invoiceNumber, total, currency, sagaId, correlationId
+            documentId, documentNumber, total, currency, sagaId, correlationId
         );
 
         // Then
         assertNotNull(event);
-        assertEquals(invoiceId, event.getInvoiceId());
-        assertEquals(invoiceNumber, event.getInvoiceNumber());
+        assertEquals(documentId, event.getDocumentId());
+        assertEquals(documentNumber, event.getDocumentNumber());
         assertEquals(total, event.getTotal());
         assertEquals(currency, event.getCurrency());
         assertEquals(sagaId, event.getSagaId());
@@ -62,8 +62,8 @@ class TaxInvoiceProcessedEventTest {
 
         // Then
         assertEquals(event.getEventId(), deserialized.getEventId());
-        assertEquals(event.getInvoiceId(), deserialized.getInvoiceId());
-        assertEquals(event.getInvoiceNumber(), deserialized.getInvoiceNumber());
+        assertEquals(event.getDocumentId(), deserialized.getDocumentId());
+        assertEquals(event.getDocumentNumber(), deserialized.getDocumentNumber());
         assertEquals(event.getTotal(), deserialized.getTotal());
         assertEquals(event.getCurrency(), deserialized.getCurrency());
         assertEquals(event.getCorrelationId(), deserialized.getCorrelationId());

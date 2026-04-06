@@ -222,7 +222,7 @@ class TaxInvoiceProcessingServiceTest {
         verify(eventPublisher).publish(eventCaptor.capture());
 
         TaxInvoiceProcessedDomainEvent processedEvent = eventCaptor.getValue();
-        assertEquals("TXN-001", processedEvent.invoiceNumber());
+        assertEquals("TXN-001", processedEvent.documentNumber());
         assertEquals("THB", processedEvent.total().currency());
         assertEquals("correlation-123", processedEvent.correlationId());
     }

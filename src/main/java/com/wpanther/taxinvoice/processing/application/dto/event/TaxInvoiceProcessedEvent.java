@@ -21,11 +21,11 @@ public class TaxInvoiceProcessedEvent extends TraceEvent {
     private static final String SOURCE = "taxinvoice-processing-service";
     private static final String TRACE_TYPE = "INVOICE_PROCESSED";
 
-    @JsonProperty("invoiceId")
-    private final String invoiceId;
+    @JsonProperty("documentId")
+    private final String documentId;
 
-    @JsonProperty("invoiceNumber")
-    private final String invoiceNumber;
+    @JsonProperty("documentNumber")
+    private final String documentNumber;
 
     @JsonProperty("total")
     private final BigDecimal total;
@@ -36,18 +36,18 @@ public class TaxInvoiceProcessedEvent extends TraceEvent {
     /**
      * Convenience constructor for creating the event.
      *
-     * @param invoiceId     the processed invoice ID
-     * @param invoiceNumber the invoice number
-     * @param total         the invoice grand total
-     * @param currency      the currency code
-     * @param sagaId        the saga orchestration instance ID
-     * @param correlationId the end-to-end correlation ID from the originating request
+     * @param documentId     the processed document ID
+     * @param documentNumber the document number
+     * @param total          the invoice grand total
+     * @param currency       the currency code
+     * @param sagaId         the saga orchestration instance ID
+     * @param correlationId  the end-to-end correlation ID from the originating request
      */
-    public TaxInvoiceProcessedEvent(String invoiceId, String invoiceNumber, BigDecimal total,
+    public TaxInvoiceProcessedEvent(String documentId, String documentNumber, BigDecimal total,
                                      String currency, String sagaId, String correlationId) {
         super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
-        this.invoiceId = invoiceId;
-        this.invoiceNumber = invoiceNumber;
+        this.documentId = documentId;
+        this.documentNumber = documentNumber;
         this.total = total;
         this.currency = currency;
     }
@@ -68,14 +68,14 @@ public class TaxInvoiceProcessedEvent extends TraceEvent {
         @JsonProperty("source") String source,
         @JsonProperty("traceType") String traceType,
         @JsonProperty("context") String context,
-        @JsonProperty("invoiceId") String invoiceId,
-        @JsonProperty("invoiceNumber") String invoiceNumber,
+        @JsonProperty("documentId") String documentId,
+        @JsonProperty("documentNumber") String documentNumber,
         @JsonProperty("total") BigDecimal total,
         @JsonProperty("currency") String currency
     ) {
         super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context);
-        this.invoiceId = invoiceId;
-        this.invoiceNumber = invoiceNumber;
+        this.documentId = documentId;
+        this.documentNumber = documentNumber;
         this.total = total;
         this.currency = currency;
     }

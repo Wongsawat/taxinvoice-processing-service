@@ -47,8 +47,8 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
     public void publish(TaxInvoiceProcessedDomainEvent domainEvent) {
         // Transform: domain event → Kafka event
         TaxInvoiceProcessedEvent kafkaEvent = new TaxInvoiceProcessedEvent(
-            domainEvent.invoiceId().value().toString(),
-            domainEvent.invoiceNumber(),
+            domainEvent.documentId().value().toString(),
+            domainEvent.documentNumber(),
             domainEvent.total().amount(),
             domainEvent.total().currency(),
             domainEvent.sagaId(),
@@ -57,18 +57,18 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
 
         Map<String, String> headers = Map.of(
             "correlationId", domainEvent.correlationId(),
-            "invoiceNumber", domainEvent.invoiceNumber()
+            "documentNumber", domainEvent.documentNumber()
         );
 
         outboxService.saveWithRouting(
             kafkaEvent,
             "ProcessedTaxInvoice",
-            domainEvent.invoiceId().value().toString(),
+            domainEvent.documentId().value().toString(),
             taxinvoiceProcessedTopic,
-            domainEvent.invoiceId().value().toString(),
+            domainEvent.documentId().value().toString(),
             headerSerializer.toJson(headers)
         );
 
-        log.info("Published TaxInvoiceProcessedEvent to outbox: {}", domainEvent.invoiceNumber());
+        log.info("Published TaxInvoiceProcessedEvent to outbox: {}", domainEvent.documentNumber());
     }
 }
