@@ -96,8 +96,8 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
 
         // Verify outbox events created (2: taxinvoice.processed + saga.reply.tax-invoice)
         String sagaId = "saga-" + correlationId;
-        awaitOutboxEventCount(invoiceId, 1);  // taxinvoice.processed uses invoiceId as aggregate_id
-        List<Map<String, Object>> invoiceOutboxEvents = getOutboxEvents(invoiceId);
+        awaitOutboxEventCount(documentId, 1);  // taxinvoice.processed uses documentId (sourceInvoiceId) as aggregate_id
+        List<Map<String, Object>> invoiceOutboxEvents = getOutboxEvents(documentId);
         assertThat(invoiceOutboxEvents).hasSize(1);
 
         Map<String, Object> processedEvent = invoiceOutboxEvents.stream()
@@ -131,22 +131,21 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
         sendEvent("saga.command.tax-invoice", documentId, command);
 
         // Then — await processing complete
-        Map<String, Object> invoice = awaitInvoiceBySourceId(documentId);
-        String invoiceId = invoice.get("id").toString();
+        awaitInvoiceBySourceId(documentId);
 
-        // Await taxinvoice.processed outbox event
-        awaitOutboxEventCount(invoiceId, 1);
-        List<Map<String, Object>> outboxEvents = getOutboxEvents(invoiceId);
+        // Await taxinvoice.processed outbox event (aggregate_id = documentId = sourceInvoiceId)
+        awaitOutboxEventCount(documentId, 1);
+        List<Map<String, Object>> outboxEvents = getOutboxEvents(documentId);
 
         // Verify taxinvoice.processed event
         Map<String, Object> processedEvent = outboxEvents.stream()
             .filter(e -> "taxinvoice.processed".equals(e.get("topic")))
             .findFirst().orElseThrow(() -> new AssertionError("No taxinvoice.processed outbox event"));
         assertThat(processedEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
-        assertThat(processedEvent.get("partition_key")).isEqualTo(invoiceId);
+        assertThat(processedEvent.get("partition_key")).isEqualTo(documentId);
         assertThat(processedEvent.get("status")).isEqualTo("PENDING");
         String processedPayload = (String) processedEvent.get("payload");
-        assertThat(processedPayload).contains(invoiceId);
+        assertThat(processedPayload).contains(documentId);
         assertThat(processedPayload).contains(invoiceNumber);
         assertThat(processedPayload).contains(correlationId);
 

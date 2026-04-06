@@ -62,16 +62,15 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         // When
         sagaCommandHandler.handleProcessCommand(command);
 
-        // Then — verify taxinvoice.processed outbox event
-        Map<String, Object> invoice = getInvoiceBySourceId(documentId);
-        String invoiceId = invoice.get("id").toString();
+        // Then — verify taxinvoice.processed outbox event (aggregate_id = documentId = sourceInvoiceId)
+        getInvoiceBySourceId(documentId);
 
-        List<Map<String, Object>> invoiceOutboxEvents = getOutboxEvents(invoiceId);
+        List<Map<String, Object>> invoiceOutboxEvents = getOutboxEvents(documentId);
         assertThat(invoiceOutboxEvents).hasSize(1);
 
         Map<String, Object> processedEvent = invoiceOutboxEvents.get(0);
         assertThat(processedEvent.get("aggregate_type")).isEqualTo("ProcessedTaxInvoice");
-        assertThat(processedEvent.get("aggregate_id")).isEqualTo(invoiceId);
+        assertThat(processedEvent.get("aggregate_id")).isEqualTo(documentId);
         assertThat(processedEvent.get("status")).isEqualTo("PENDING");
         assertThat(processedEvent.get("topic")).isEqualTo("taxinvoice.processed");
 
@@ -102,17 +101,16 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
-        Map<String, Object> invoice = getInvoiceBySourceId(documentId);
-        String invoiceId = invoice.get("id").toString();
+        getInvoiceBySourceId(documentId);
 
-        List<Map<String, Object>> outboxEvents = getOutboxEvents(invoiceId);
+        List<Map<String, Object>> outboxEvents = getOutboxEvents(documentId);
         Map<String, Object> processedEvent = outboxEvents.stream()
             .filter(e -> "taxinvoice.processed".equals(e.get("topic")))
             .findFirst().orElseThrow(() -> new AssertionError("No taxinvoice.processed outbox event"));
 
-        assertThat(processedEvent.get("partition_key")).isEqualTo(invoiceId);
+        assertThat(processedEvent.get("partition_key")).isEqualTo(documentId);
         String payload = (String) processedEvent.get("payload");
-        assertThat(payload).contains(invoiceId);
+        assertThat(payload).contains(documentId);
         assertThat(payload).contains(invoiceNumber);
         assertThat(payload).contains(correlationId);
     }
@@ -159,15 +157,14 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
 
         // When
         sagaCommandHandler.handleProcessCommand(command);
-        Map<String, Object> invoice = getInvoiceBySourceId(documentId);
-        String invoiceId = invoice.get("id").toString();
+        getInvoiceBySourceId(documentId);
 
-        // Then — await message on taxinvoice.processed topic
+        // Then — await message on taxinvoice.processed topic (key = documentId = sourceInvoiceId)
         await().atMost(2, MINUTES).pollInterval(2, SECONDS)
-               .until(() -> hasMessageOnTopic("taxinvoice.processed", invoiceId));
+               .until(() -> hasMessageOnTopic("taxinvoice.processed", documentId));
 
         List<ConsumerRecord<String, String>> messages =
-            getMessagesFromTopic("taxinvoice.processed", invoiceId);
+            getMessagesFromTopic("taxinvoice.processed", documentId);
         assertThat(messages).isNotEmpty();
 
         JsonNode payload = parseJson(messages.get(0).value());

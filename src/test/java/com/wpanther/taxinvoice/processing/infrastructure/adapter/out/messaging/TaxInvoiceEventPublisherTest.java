@@ -4,7 +4,7 @@ import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import com.wpanther.taxinvoice.processing.domain.event.TaxInvoiceProcessedDomainEvent;
 import com.wpanther.taxinvoice.processing.domain.model.Money;
 import java.math.BigDecimal;
-import com.wpanther.taxinvoice.processing.domain.model.TaxInvoiceId;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +39,7 @@ class TaxInvoiceEventPublisherTest {
     void testPublishTaxInvoiceProcessedSuccess() throws Exception {
         // Given
         TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
-            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440000"),
+            "550e8400-e29b-41d4-a716-446655440000",
             "TXN-001",
             Money.of(new BigDecimal("10000.00"), "THB"),
             "saga-123",
@@ -68,7 +68,7 @@ class TaxInvoiceEventPublisherTest {
     void testPublishTaxInvoiceProcessedHeaderContent() throws Exception {
         // Given
         TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
-            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440001"),
+            "550e8400-e29b-41d4-a716-446655440001",
             "TXN-001",
             Money.of(new BigDecimal("10000.00"), "THB"),
             "saga-123",
@@ -101,7 +101,7 @@ class TaxInvoiceEventPublisherTest {
     void testToJsonError() throws Exception {
         // Given
         TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
-            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440002"),
+            "550e8400-e29b-41d4-a716-446655440002",
             "TXN-001",
             Money.of(new BigDecimal("10000.00"), "THB"),
             "saga-123",
@@ -132,7 +132,7 @@ class TaxInvoiceEventPublisherTest {
     void testPublishUsesCorrectTopic() throws Exception {
         // Given
         TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
-            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440003"),
+            "550e8400-e29b-41d4-a716-446655440003",
             "TXN-001",
             Money.of(new BigDecimal("10000.00"), "THB"),
             "saga-123",
@@ -155,7 +155,7 @@ class TaxInvoiceEventPublisherTest {
     void testPublishUsesInvoiceIdAsPartitionKey() throws Exception {
         // Given
         TaxInvoiceProcessedDomainEvent event = new TaxInvoiceProcessedDomainEvent(
-            TaxInvoiceId.from("550e8400-e29b-41d4-a716-446655440004"),
+            "550e8400-e29b-41d4-a716-446655440004",
             "TXN-002",
             Money.of(new BigDecimal("5000.00"), "THB"),
             "saga-456",

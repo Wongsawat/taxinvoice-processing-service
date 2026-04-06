@@ -47,7 +47,7 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
     public void publish(TaxInvoiceProcessedDomainEvent domainEvent) {
         // Transform: domain event → Kafka event
         TaxInvoiceProcessedEvent kafkaEvent = new TaxInvoiceProcessedEvent(
-            domainEvent.documentId().value().toString(),
+            domainEvent.documentId(),
             domainEvent.documentNumber(),
             domainEvent.total().amount(),
             domainEvent.total().currency(),
@@ -63,9 +63,9 @@ public class TaxInvoiceEventPublisher implements TaxInvoiceEventPublishingPort {
         outboxService.saveWithRouting(
             kafkaEvent,
             "ProcessedTaxInvoice",
-            domainEvent.documentId().value().toString(),
+            domainEvent.documentId(),
             taxinvoiceProcessedTopic,
-            domainEvent.documentId().value().toString(),
+            domainEvent.documentId(),
             headerSerializer.toJson(headers)
         );
 

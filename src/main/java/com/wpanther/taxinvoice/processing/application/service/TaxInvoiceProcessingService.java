@@ -213,7 +213,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
                 existingInvoice.markCompleted();
                 invoiceRepository.save(existingInvoice);
                 TaxInvoiceProcessedDomainEvent domainEvent = TaxInvoiceProcessedDomainEvent.of(
-                    existingInvoice.getId(),
+                    existingInvoice.getSourceInvoiceId(),
                     existingInvoice.getInvoiceNumber(),
                     existingInvoice.getTotal(),
                     sagaId,
@@ -250,7 +250,7 @@ public class TaxInvoiceProcessingService implements ProcessTaxInvoiceUseCase, Co
 
         // Publish notification event (kept for notification-service)
         TaxInvoiceProcessedDomainEvent domainEvent = TaxInvoiceProcessedDomainEvent.of(
-            saved.getId(),
+            saved.getSourceInvoiceId(),
             saved.getInvoiceNumber(),
             saved.getTotal(),
             sagaId,
