@@ -1,5 +1,6 @@
 package com.wpanther.taxinvoice.processing.integration;
 
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -10,8 +11,10 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @DisplayName("Kafka Consumer Integration Tests")
 @Tag("integration")
@@ -254,6 +257,67 @@ class KafkaConsumerIntegrationTest extends AbstractKafkaConsumerTest {
 
         // Then — no invoice created, but FAILURE reply sent
         assertNoInvoiceCreatedAfterWait(documentId);
+    }
+
+    @Test
+    @DisplayName("Should compensate (delete) a previously processed tax invoice")
+    void shouldCompensateProcessedTaxInvoice() {
+        // Given — process first
+        String documentId = "DOC-" + UUID.randomUUID();
+        String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
+        String correlationId = UUID.randomUUID().toString();
+
+        ProcessTaxInvoiceCommand processCommand = createProcessTaxInvoiceCommand(
+            documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), correlationId);
+        sendEvent("saga.command.tax-invoice", documentId, processCommand);
+        awaitInvoiceBySourceId(documentId);
+
+        // When — send compensation command
+        String compensateCorrelationId = UUID.randomUUID().toString();
+        String compensateSagaId = "saga-" + compensateCorrelationId;
+        CompensateTaxInvoiceCommand compensateCommand = createCompensateTaxInvoiceCommand(
+            documentId, compensateCorrelationId);
+        sendEvent("saga.compensation.tax-invoice", documentId, compensateCommand);
+
+        // Then — invoice deleted from DB
+        await().atMost(2, TimeUnit.MINUTES).pollInterval(1, TimeUnit.SECONDS)
+               .until(() -> getInvoiceBySourceId(documentId) == null);
+
+        // COMPENSATED reply written to outbox
+        await().atMost(2, TimeUnit.MINUTES).pollInterval(1, TimeUnit.SECONDS)
+               .until(() -> !getOutboxEventsBySagaId(compensateSagaId).isEmpty());
+
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEventsBySagaId(compensateSagaId);
+        Map<String, Object> replyEvent = sagaOutboxEvents.stream()
+            .filter(e -> "saga.reply.tax-invoice".equals(e.get("topic")))
+            .findFirst().orElseThrow(() -> new AssertionError("No saga.reply.tax-invoice outbox event after compensation"));
+        assertThat((String) replyEvent.get("payload")).contains("COMPENSATED");
+        assertThat((String) replyEvent.get("payload")).contains(compensateCorrelationId);
+    }
+
+    @Test
+    @DisplayName("Should send COMPENSATED reply even for non-existent invoice (idempotent no-op)")
+    void shouldSendCompensatedReplyForNonExistentInvoice() {
+        // Given — invoice was never processed
+        String documentId = "DOC-" + UUID.randomUUID();
+        String correlationId = UUID.randomUUID().toString();
+        String sagaId = "saga-" + correlationId;
+
+        CompensateTaxInvoiceCommand compensateCommand = createCompensateTaxInvoiceCommand(
+            documentId, correlationId);
+
+        // When
+        sendEvent("saga.compensation.tax-invoice", documentId, compensateCommand);
+
+        // Then — COMPENSATED reply still written to outbox
+        await().atMost(2, TimeUnit.MINUTES).pollInterval(1, TimeUnit.SECONDS)
+               .until(() -> !getOutboxEventsBySagaId(sagaId).isEmpty());
+
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEventsBySagaId(sagaId);
+        Map<String, Object> replyEvent = sagaOutboxEvents.stream()
+            .filter(e -> "saga.reply.tax-invoice".equals(e.get("topic")))
+            .findFirst().orElseThrow(() -> new AssertionError("No saga.reply.tax-invoice outbox event"));
+        assertThat((String) replyEvent.get("payload")).contains("COMPENSATED");
     }
 
     @Test

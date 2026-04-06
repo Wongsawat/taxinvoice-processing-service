@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.integration.config.ConsumerTestConfiguration;
 import com.wpanther.taxinvoice.processing.integration.config.TestKafkaProducerConfig;
@@ -77,6 +78,14 @@ public abstract class AbstractKafkaConsumerTest {
         return new ProcessTaxInvoiceCommand(
             "saga-" + correlationId, SagaStep.PROCESS_TAX_INVOICE, correlationId,
             documentId, xmlContent, invoiceNumber
+        );
+    }
+
+    protected CompensateTaxInvoiceCommand createCompensateTaxInvoiceCommand(
+            String documentId, String correlationId) {
+        return new CompensateTaxInvoiceCommand(
+            "saga-" + correlationId, SagaStep.PROCESS_TAX_INVOICE, correlationId,
+            SagaStep.PROCESS_TAX_INVOICE.name(), documentId, "TAX_INVOICE"
         );
     }
 

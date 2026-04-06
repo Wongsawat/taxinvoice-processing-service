@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.processing.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.CompensateTaxInvoiceCommand;
 import com.wpanther.taxinvoice.processing.infrastructure.adapter.in.messaging.dto.ProcessTaxInvoiceCommand;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
@@ -170,8 +171,8 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         assertThat(messages).isNotEmpty();
 
         JsonNode payload = parseJson(messages.get(0).value());
-        assertThat(payload.has("invoiceNumber")).isTrue();
-        assertThat(payload.get("invoiceNumber").asText()).isEqualTo(invoiceNumber);
+        assertThat(payload.has("documentNumber")).isTrue();
+        assertThat(payload.get("documentNumber").asText()).isEqualTo(invoiceNumber);
         assertThat(payload.get("correlationId").asText()).isEqualTo(correlationId);
     }
 
@@ -203,5 +204,75 @@ class TaxInvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         assertThat(payload.get("status").asText()).isEqualTo("SUCCESS");
         assertThat(payload.get("correlationId").asText()).isEqualTo(correlationId);
         assertThat(payload.get("sagaId").asText()).isEqualTo(sagaId);
+    }
+
+    // ========== Compensation Tests ==========
+
+    @Test
+    @DisplayName("Should write COMPENSATED reply to outbox and delete invoice from DB")
+    void shouldWriteCompensatedReplyToOutbox() {
+        // Given — process first so there is something to compensate
+        String documentId = "DOC-" + UUID.randomUUID();
+        String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
+        String processCorrelationId = UUID.randomUUID().toString();
+
+        ProcessTaxInvoiceCommand processCommand = createProcessTaxInvoiceCommand(
+            documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), processCorrelationId);
+        sagaCommandHandler.handleProcessCommand(processCommand);
+        assertThat(getInvoiceBySourceId(documentId)).isNotNull();
+
+        // When — compensate
+        String compensateCorrelationId = UUID.randomUUID().toString();
+        String compensateSagaId = "saga-" + compensateCorrelationId;
+        CompensateTaxInvoiceCommand compensateCommand = createCompensateTaxInvoiceCommand(
+            documentId, compensateCorrelationId);
+        sagaCommandHandler.handleCompensation(compensateCommand);
+
+        // Then — invoice hard-deleted from DB
+        assertThat(getInvoiceBySourceId(documentId)).isNull();
+
+        // COMPENSATED reply written to outbox
+        List<Map<String, Object>> sagaOutboxEvents = getOutboxEvents(compensateSagaId);
+        assertThat(sagaOutboxEvents).isNotEmpty();
+        Map<String, Object> replyEvent = sagaOutboxEvents.stream()
+            .filter(e -> "saga.reply.tax-invoice".equals(e.get("topic")))
+            .findFirst().orElseThrow(() -> new AssertionError("No saga.reply.tax-invoice outbox event after compensation"));
+        String payload = (String) replyEvent.get("payload");
+        assertThat(payload).contains("COMPENSATED");
+        assertThat(payload).contains(compensateCorrelationId);
+        assertThat(replyEvent.get("partition_key")).isEqualTo(compensateSagaId);
+    }
+
+    @Test
+    @DisplayName("Should publish COMPENSATED reply to Kafka via CDC")
+    void shouldPublishCompensatedReplyViaCdc() throws Exception {
+        // Given — process first
+        String documentId = "DOC-" + UUID.randomUUID();
+        String invoiceNumber = "TV-" + UUID.randomUUID().toString().substring(0, 8);
+        String processCorrelationId = UUID.randomUUID().toString();
+
+        ProcessTaxInvoiceCommand processCommand = createProcessTaxInvoiceCommand(
+            documentId, invoiceNumber, getSampleTaxInvoiceXml(invoiceNumber), processCorrelationId);
+        sagaCommandHandler.handleProcessCommand(processCommand);
+
+        // When — compensate
+        String compensateCorrelationId = UUID.randomUUID().toString();
+        String compensateSagaId = "saga-" + compensateCorrelationId;
+        CompensateTaxInvoiceCommand compensateCommand = createCompensateTaxInvoiceCommand(
+            documentId, compensateCorrelationId);
+        sagaCommandHandler.handleCompensation(compensateCommand);
+
+        // Then — await COMPENSATED reply on saga.reply.tax-invoice topic via CDC
+        await().atMost(2, MINUTES).pollInterval(2, SECONDS)
+               .until(() -> hasMessageOnTopic("saga.reply.tax-invoice", compensateSagaId));
+
+        List<ConsumerRecord<String, String>> messages =
+            getMessagesFromTopic("saga.reply.tax-invoice", compensateSagaId);
+        assertThat(messages).isNotEmpty();
+
+        JsonNode payload = parseJson(messages.get(0).value());
+        assertThat(payload.get("status").asText()).isEqualTo("COMPENSATED");
+        assertThat(payload.get("correlationId").asText()).isEqualTo(compensateCorrelationId);
+        assertThat(payload.get("sagaId").asText()).isEqualTo(compensateSagaId);
     }
 }
