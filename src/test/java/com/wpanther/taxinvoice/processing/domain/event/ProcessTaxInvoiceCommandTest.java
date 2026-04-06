@@ -24,7 +24,7 @@ class ProcessTaxInvoiceCommandTest {
         assertEquals("corr-1", cmd.getCorrelationId());
         assertEquals("doc-1", cmd.getDocumentId());
         assertEquals("<xml>test</xml>", cmd.getXmlContent());
-        assertEquals("TV-001", cmd.getInvoiceNumber());
+        assertEquals("TV-001", cmd.getDocumentNumber());
         assertNotNull(cmd.getEventId());
         assertNotNull(cmd.getOccurredAt());
     }
@@ -66,7 +66,7 @@ class ProcessTaxInvoiceCommandTest {
         assertEquals(original.getCorrelationId(), deserialized.getCorrelationId());
         assertEquals(original.getDocumentId(), deserialized.getDocumentId());
         assertEquals(original.getXmlContent(), deserialized.getXmlContent());
-        assertEquals(original.getInvoiceNumber(), deserialized.getInvoiceNumber());
+        assertEquals(original.getDocumentNumber(), deserialized.getDocumentNumber());
     }
 
     @Test
@@ -80,7 +80,7 @@ class ProcessTaxInvoiceCommandTest {
         assertNull(cmd.getCorrelationId());
         assertNull(cmd.getDocumentId());
         assertNull(cmd.getXmlContent());
-        assertNull(cmd.getInvoiceNumber());
+        assertNull(cmd.getDocumentNumber());
     }
 
     @Test
