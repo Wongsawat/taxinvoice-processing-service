@@ -184,7 +184,7 @@ mvn spring-boot:run
 docker build -t taxinvoice-processing-service:latest .
 
 # Run container (TZ=Asia/Bangkok required for correct cron scheduling)
-docker run -p 8088:8088 \
+docker run -p 8083:8083 \
   -e TZ=Asia/Bangkok \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
@@ -200,10 +200,10 @@ docker run -p 8088:8088 \
 This service is event-driven with no REST API endpoints. Only Spring Boot Actuator endpoints are available:
 
 ```bash
-GET http://localhost:8088/actuator/health
-GET http://localhost:8088/actuator/metrics
-GET http://localhost:8088/actuator/prometheus
-GET http://localhost:8088/actuator/camelroutes
+GET http://localhost:8083/actuator/health
+GET http://localhost:8083/actuator/metrics
+GET http://localhost:8083/actuator/prometheus
+GET http://localhost:8083/actuator/camelroutes
 ```
 
 ## Development
